@@ -116,6 +116,7 @@ function renderView(pageKey) {
     case 'users': return renderUsers();
     case 'audit-log': return renderAuditLog();
     case 'settings': return renderSettings();
+    case 'data-saya': return renderDataSaya();
     case 'anggota-detail': return renderAnggotaDetail(currentDetailMemberId);
     default:
       contentArea().innerHTML = '<div class="empty-state"><p>Halaman "' + escapeHtml(pageKey) + '" belum tersedia.</p></div>';
@@ -537,20 +538,32 @@ function cryptoRandomId() {
 
 /* ============================================================ LAPORAN */
 var LAPORAN_TABS = [
-  { key: 'anggota', label: 'Anggota' },
-  { key: 'simpanan', label: 'Simpanan' },
-  { key: 'infaq', label: 'Infaq' },
-  { key: 'pinjaman', label: 'Semua Pinjaman' },
-  { key: 'pinjaman-aktif', label: 'Pinjaman Aktif' },
-  { key: 'pinjaman-lunas', label: 'Pinjaman Lunas' },
-  { key: 'pembayaran', label: 'Pembayaran' },
-  { key: 'periode', label: 'Rekap Periode' }
+  { key: 'anggota', label: 'Anggota', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'simpanan', label: 'Simpanan', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'infaq', label: 'Infaq', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'pinjaman', label: 'Semua Pinjaman', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'pinjaman-aktif', label: 'Pinjaman Aktif', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'pinjaman-lunas', label: 'Pinjaman Lunas', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'pembayaran', label: 'Pembayaran', roles: ['ADMIN', 'PETUGAS'] },
+  // "Rekap Periode" murni agregat (tidak merinci per-anggota) -- data umum,
+  // jadi PIMPINAN/VIEWER tetap boleh (aturan visibilitas data).
+  { key: 'periode', label: 'Rekap Periode', roles: ['ADMIN', 'PETUGAS', 'PIMPINAN', 'VIEWER'] }
 ];
 var laporanActiveTab = 'anggota';
 
+function laporanTabsForRole(role) {
+  return LAPORAN_TABS.filter(function (t) { return t.roles.indexOf(role) > -1; });
+}
+
 async function renderLaporan() {
   setPageTitle('Laporan');
-  var tabsHtml = LAPORAN_TABS.map(function (t) {
+  var visibleTabs = laporanTabsForRole(currentUser.role);
+  // Kalau tab aktif saat ini tidak diizinkan utk role ini (mis. tersisa dari
+  // sesi ADMIN sebelumnya), pindah ke tab pertama yang boleh dilihat.
+  if (visibleTabs.every(function (t) { return t.key !== laporanActiveTab; })) {
+    laporanActiveTab = visibleTabs[0].key;
+  }
+  var tabsHtml = visibleTabs.map(function (t) {
     var activeClass = t.key === laporanActiveTab ? ' btn-primary' : ' btn-secondary';
     return '<button class="btn text-small' + activeClass + ' no-print" data-laporan-tab="' + t.key + '" style="margin:0 6px 6px 0;">' + escapeHtml(t.label) + '</button>';
   }).join('');
@@ -559,6 +572,9 @@ async function renderLaporan() {
       '<div style="flex-wrap:wrap;">' + tabsHtml + '</div>' +
       '<button class="btn btn-secondary" id="btn-cetak-laporan">🖶 Cetak Laporan</button>' +
     '</div>' +
+    (visibleTabs.length < LAPORAN_TABS.length
+      ? '<p class="text-small text-muted no-print">Sebagian laporan (per-anggota) tidak ditampilkan untuk role Anda -- lihat "Data Saya" untuk data pribadi.</p>'
+      : '') +
     '<div id="laporan-body"><div class="empty-state">Memuat...</div></div>';
 
   contentArea().querySelectorAll('[data-laporan-tab]').forEach(function (btn) {
@@ -857,4 +873,43 @@ function settingsField(label, name, value, type, hint) {
   return '<div class="field"><label>' + escapeHtml(label) + '</label>' +
     '<input class="input" name="' + name + '" type="' + type + '" value="' + escapeHtml(value) + '">' +
     '<div class="text-small text-muted" style="margin-top:4px;">' + escapeHtml(hint) + '</div></div>';
+}
+
+/* ============================================================ DATA SAYA (data pribadi milik user login sendiri) */
+async function renderDataSaya() {
+  setPageTitle('Data Saya');
+  showLoading();
+  var results = await Promise.all([apiCall('getMyMemberData', {}), apiCall('getMyTransactionHistory', {})]);
+  var res = results[0], histRes = results[1];
+  if (!res.success) return showError(res.error);
+
+  if (!res.data.isMember) {
+    contentArea().innerHTML =
+      '<div class="content-header"><h1 style="margin:0;">Data Saya</h1></div>' +
+      '<div class="empty-state">Akun Anda (' + escapeHtml(currentUser.email) + ') belum terdaftar sebagai anggota koperasi, ' +
+      'jadi tidak ada data simpanan/pinjaman pribadi untuk ditampilkan.</div>';
+    return;
+  }
+
+  var m = res.data;
+  var st = getSimpleStatusView(m.status);
+  var hist = histRes.success ? histRes.data : null;
+
+  contentArea().innerHTML =
+    '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
+      '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
+      ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div></div>' +
+    '<div class="grid-summary" style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-4); margin-bottom:var(--space-6);">' +
+      summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
+      summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
+      summaryCard('Total Simpanan', formatRupiah(m.savings.total), '') +
+      summaryCard('Total Infaq', formatRupiah(m.infaqTotal), '') +
+      summaryCard('Total Pinjaman', formatRupiah(m.loans.totalPinjaman), '') +
+      summaryCard('Total Dibayar', formatRupiah(m.loans.totalPembayaran), '') +
+      summaryCard('Sisa Pinjaman', formatRupiah(m.loans.sisa), '') +
+    '</div>' +
+    '<h2>Riwayat Simpanan Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.savings }, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) : '') +
+    '<h2 style="margin-top:var(--space-6);">Riwayat Infaq Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.infaq }, ['tanggal', 'nominal'], ['Tanggal', 'Nominal']) : '') +
+    '<h2 style="margin-top:var(--space-6);">Pinjaman Saya</h2>' + (hist ? renderLoanMiniTable({ success: true, data: hist.loans }) : '') +
+    '<h2 style="margin-top:var(--space-6);">Riwayat Pembayaran Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.payments }, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']) : '');
 }

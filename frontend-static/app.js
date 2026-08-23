@@ -56,13 +56,20 @@
   // ---- Definisi navigasi (§5 Prompt Tahap 4) dengan syarat role (Tahap 2 §K) ----
   var NAV_STRUCTURE = [
     { key: 'dashboard', label: 'Dashboard', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
+    { key: 'data-saya', label: 'Data Saya', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
     { group: 'Data', items: [
-      { key: 'anggota-list', label: 'Anggota', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
-      { key: 'simpanan-list', label: 'Simpanan', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
-      { key: 'infaq-list', label: 'Infaq', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] }
+      // Aturan visibilitas: PIMPINAN/VIEWER TIDAK boleh lihat data anggota
+      // LAIN (hanya data umum/agregat + data pribadi sendiri lewat "Data
+      // Saya" di atas) -- PETUGAS dikecualikan karena tugasnya memang
+      // mencatat transaksi untuk anggota lain. Backend menegakkan ini juga
+      // (BROAD_READ_ROLES di Config.gs) -- ini murni supaya menunya tidak
+      // menyesatkan, bukan satu-satunya lapisan keamanan.
+      { key: 'anggota-list', label: 'Anggota', roles: ['ADMIN','PETUGAS'] },
+      { key: 'simpanan-list', label: 'Simpanan', roles: ['ADMIN','PETUGAS'] },
+      { key: 'infaq-list', label: 'Infaq', roles: ['ADMIN','PETUGAS'] }
     ]},
     { group: 'Pinjaman', items: [
-      { key: 'pinjaman-list', label: 'Daftar Pinjaman', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
+      { key: 'pinjaman-list', label: 'Daftar Pinjaman', roles: ['ADMIN','PETUGAS'] },
       { key: 'pinjaman-form', label: 'Pengajuan', roles: ['ADMIN','PETUGAS'] },
       { key: 'pembayaran-form', label: 'Pembayaran', roles: ['ADMIN','PETUGAS'] }
     ]},
