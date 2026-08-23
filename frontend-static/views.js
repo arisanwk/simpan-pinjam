@@ -162,7 +162,7 @@ async function renderAnggotaList() {
     return '<tr class="row-clickable" data-member-id="' + escapeHtml(m.member_id) + '" style="cursor:pointer;">' +
       '<td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td>' +
       '<td data-label="Nama">' + escapeHtml(m.nama) + '</td>' +
-      '<td data-label="Unit">' + escapeHtml(m.unit) + '</td>' +
+      '<td data-label="No HP">' + escapeHtml(m.no_hp) + '</td>' +
       '<td data-label="Status"><span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></td>' +
       '</tr>';
   }).join('');
@@ -173,7 +173,7 @@ async function renderAnggotaList() {
     '</div>' +
     (res.data.length === 0
       ? '<div class="empty-state">Belum ada anggota.' + (canEdit ? '<br><button class="btn btn-secondary" id="btn-add-anggota-empty">+ Tambah Anggota</button>' : '') + '</div>'
-      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nomor</th><th>Nama</th><th>Unit</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
+      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nomor</th><th>Nama</th><th>No HP</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
 
   ['btn-add-anggota', 'btn-add-anggota-empty'].forEach(function (id) {
     var btn = document.getElementById(id);
@@ -608,10 +608,10 @@ async function renderLaporanBody(tabKey) {
       var st = getSimpleStatusView(m.status);
       return '<tr><td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td>' +
         '<td data-label="Nama">' + escapeHtml(m.nama) + '</td>' +
-        '<td data-label="Unit">' + escapeHtml(m.unit) + '</td>' +
+        '<td data-label="No HP">' + escapeHtml(m.no_hp) + '</td>' +
         '<td data-label="Status"><span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></td></tr>';
     }).join('');
-    body.innerHTML = laporanTable(['Nomor', 'Nama', 'Unit', 'Status'], rows, membersCache.length);
+    body.innerHTML = laporanTable(['Nomor', 'Nama', 'No HP', 'Status'], rows, membersCache.length);
     return;
   }
 
