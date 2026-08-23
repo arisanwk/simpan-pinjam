@@ -315,3 +315,112 @@ body{background:var(--color-surface)}
   .table-wrap{border:0;background:transparent;box-shadow:none;overflow:visible}table.data-table tr{background:#fff;border:1px solid var(--color-border);border-radius:14px;margin-bottom:12px;padding:14px;box-shadow:var(--shadow-sm)}table.data-table td{padding:6px 0;align-items:flex-start;text-align:right}.amount{white-space:normal}
 }
 @media (max-width:390px){.header .page-title{max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.content{padding:12px}.summary-card .value{font-size:20px}}
+
+
+/* ============================================================
+   Branding ARISAN WK (Wanita Keadilan)
+   Hanya visual/branding. Tidak mengubah struktur data atau logika.
+   ============================================================ */
+.sidebar .brand {
+  min-height: 58px;
+  gap: 12px;
+}
+.sidebar .brand::before { display: none !important; content: none !important; }
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  flex: 0 0 38px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px;
+}
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.brand-copy strong {
+  font-size: 16px;
+  letter-spacing: .02em;
+  color: #fff;
+}
+.brand-copy small {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255,255,255,.62);
+  letter-spacing: .04em;
+}
+
+#login-screen {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 12%, rgba(23,107,87,.10), transparent 28%),
+    radial-gradient(circle at 88% 88%, rgba(30,92,74,.08), transparent 30%),
+    var(--color-surface) !important;
+}
+#login-screen .login-card {
+  width: 410px !important;
+  border-radius: 20px !important;
+  padding: 36px 32px !important;
+  box-shadow: 0 20px 55px rgba(17,24,39,.10) !important;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: left;
+  margin-bottom: 18px;
+}
+.login-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #fff;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+.login-brand h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.1;
+  letter-spacing: -.02em;
+}
+.brand-subtitle {
+  margin-top: 5px;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+.login-tagline {
+  margin: 0 auto 18px !important;
+  max-width: 310px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1199px) and (min-width: 768px) {
+  .sidebar .brand { padding-left: 8px; padding-right: 8px; }
+  .brand-logo { width: 34px; height: 34px; flex-basis: 34px; }
+  .brand-copy strong { font-size: 14px; }
+  .brand-copy small { font-size: 9px; }
+}
+@media (max-width: 767px) {
+  .sidebar .brand {
+    display: flex !important;
+    padding: 2px 12px 18px !important;
+  }
+  .brand-copy { display: flex !important; }
+  #login-screen .login-card {
+    width: calc(100vw - 28px) !important;
+    padding: 28px 20px !important;
+  }
+  .login-brand { gap: 12px; }
+  .login-logo { width: 50px; height: 50px; }
+  .login-brand h1 { font-size: 22px; }
+}

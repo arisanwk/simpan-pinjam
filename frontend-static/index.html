@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Simpan Pinjam</title>
+  <title>ARISAN WK | Wanita Keadilan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -27,7 +27,7 @@
   <!-- Header & footer khusus cetak — hanya tampil saat Print/Save as PDF
        (lihat aturan @media print di styles.css). Diisi JS sebelum window.print(). -->
   <div id="print-header">
-    <div class="app-name">Simpan Pinjam TVRI</div>
+    <div class="app-name">ARISAN WK — Wanita Keadilan</div>
     <div class="report-title" id="print-report-title"></div>
     <div class="meta" id="print-report-meta"></div>
   </div>
@@ -35,8 +35,14 @@
   <!-- Layar login -- ditampilkan sebelum ada sesi valid -->
   <div id="login-screen" class="no-print">
     <div class="login-card">
-      <h1>Simpan Pinjam</h1>
-      <p class="text-muted">Masuk dengan akun Google kantor Anda.</p>
+      <div class="login-brand">
+        <img src="assets/pks.png" alt="Logo PKS" class="login-logo">
+        <div>
+          <h1>ARISAN WK</h1>
+          <div class="brand-subtitle">Wanita Keadilan</div>
+        </div>
+      </div>
+      <p class="text-muted login-tagline">Aplikasi Simpan Pinjam • Masuk dengan akun Google Anda.</p>
       <div id="google-signin-button" style="display:flex; justify-content:center; margin-top: var(--space-4);"></div>
       <div id="login-loading" class="text-small text-muted">Memeriksa sesi...</div>
       <div id="login-error"></div>

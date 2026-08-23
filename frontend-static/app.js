@@ -79,7 +79,7 @@
   function renderSidebar(currentUser, activeKey) {
     var root = document.getElementById('sidebar-nav');
     if (!root) return;
-    var html = '<div class="brand">Simpan Pinjam</div>';
+    var html = '<div class="brand"><img src="assets/pks.png" alt="Logo PKS" class="brand-logo"><span class="brand-copy"><strong>ARISAN WK</strong><small>Wanita Keadilan</small></span></div>';
     NAV_STRUCTURE.forEach(function (entry) {
       if (entry.group) {
         var visibleItems = entry.items.filter(function (it) { return it.roles.indexOf(currentUser.role) > -1; });
