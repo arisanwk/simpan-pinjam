@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simpan Pinjam</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="sidebar" id="sidebar-nav" aria-label="Navigasi utama">
+      <!-- diisi oleh renderSidebar() di JavaScript.html sesuai role user -->
+    </nav>
+
+    <div class="main-col">
+      <header class="header">
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="header-right">
+          <div class="search">
+            <input class="input" type="search" placeholder="Cari anggota, pinjaman..." aria-label="Pencarian global">
+          </div>
+          <div class="user-chip" id="header-user-chip">
+            <!-- diisi oleh renderUserChip() -->
+          </div>
+        </div>
+      </header>
+
+      <main class="content" id="content-area">
+        <!-- Konten per-halaman (Dashboard, Anggota, dst.) di-render di sini
+             mulai STEP 4.4 dan seterusnya. -->
+        <div class="empty-state">
+          <p>Halaman konten akan diisi mulai STEP 4.4 (Dashboard).</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
