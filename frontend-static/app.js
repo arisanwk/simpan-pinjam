@@ -1,7 +1,8 @@
 // ============================================================
 // Helper client bersama — STEP 4.2, diperbarui STEP "Koneksi
-// Spreadsheet<->Frontend" untuk memakai auth.js/api.js sungguhan
-// (menggantikan MOCK_CURRENT_USER).
+// Spreadsheet<->Frontend" untuk memakai auth.js/api.js sungguhan,
+// dan sekali lagi untuk branding ARISAN WK + navigasi mobile
+// (drawer + hamburger) yang diperbaiki.
 // ============================================================
 
   /** Cermin formatRupiah di Utils.gs (backend) — HARUS identik hasilnya. */
@@ -53,6 +54,14 @@
     return { label: status, badgeClass: 'badge-neutral' };
   }
 
+  // ---- Branding (ARISAN WK / Wanita Keadilan) — satu tempat, dipakai
+  //      renderSidebar() & bisa dipakai ulang di tempat lain kalau perlu. ----
+  var APP_BRAND = {
+    name: 'ARISAN WK',
+    subtitle: 'Wanita Keadilan',
+    logoUrl: 'assets/pks.png'
+  };
+
   // ---- Definisi navigasi (§5 Prompt Tahap 4) dengan syarat role (Tahap 2 §K) ----
   var NAV_STRUCTURE = [
     { key: 'dashboard', label: 'Dashboard', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
@@ -86,7 +95,11 @@
   function renderSidebar(currentUser, activeKey) {
     var root = document.getElementById('sidebar-nav');
     if (!root) return;
-    var html = '<div class="brand">Simpan Pinjam</div>';
+    var html =
+      '<div class="brand">' +
+        '<img src="' + APP_BRAND.logoUrl + '" alt="Logo" class="brand-logo">' +
+        '<span class="brand-copy"><strong>' + APP_BRAND.name + '</strong><small>' + APP_BRAND.subtitle + '</small></span>' +
+      '</div>';
     NAV_STRUCTURE.forEach(function (entry) {
       if (entry.group) {
         var visibleItems = entry.items.filter(function (it) { return it.roles.indexOf(currentUser.role) > -1; });
@@ -115,6 +128,42 @@
     document.getElementById('logout-btn').addEventListener('click', signOut);
   }
 
+  // ---- Navigasi mobile (hamburger + drawer) ----
+  // Diperbaiki: sebelumnya beberapa lapis CSS untuk .sidebar saling
+  // menimpa (peninggalan beberapa kali revisi UI) sehingga drawer kadang
+  // gagal terbuka di orientasi potret. styles.css sekarang HANYA punya
+  // SATU definisi drawer mobile (lihat @media max-width:767px di sana) --
+  // JS di sini murni menambah/menghapus class 'open', tidak bergantung
+  // pada orientasi sama sekali, cuma lebar layar (lewat CSS).
+  function isMobileMenuOpen() {
+    var sidebar = document.getElementById('sidebar-nav');
+    return !!(sidebar && sidebar.classList.contains('open'));
+  }
+
+  function openMobileMenu() {
+    var sidebar = document.getElementById('sidebar-nav');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    var menuBtn = document.getElementById('mobile-menu-btn');
+    if (sidebar) sidebar.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('mobile-menu-open'); // cegah scroll di belakang drawer
+  }
+
+  function closeMobileMenu() {
+    var sidebar = document.getElementById('sidebar-nav');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    var menuBtn = document.getElementById('mobile-menu-btn');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('open');
+    if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('mobile-menu-open');
+  }
+
+  function toggleMobileMenu() {
+    if (isMobileMenuOpen()) closeMobileMenu(); else openMobileMenu();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // Render awal (sidebar/header) dilakukan auth.js lewat onLoginSuccess()
     // setelah login/verifikasi token berhasil. initGoogleSignIn() TIDAK
@@ -122,6 +171,14 @@
     // memutuskan: pulihkan sesi tersimpan, coba auto-sign-in diam-diam,
     // atau baru render tombol manual sebagai fallback (lihat auth.js).
     tryRestoreSession();
+
+    var menuBtn = document.getElementById('mobile-menu-btn');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    if (menuBtn) menuBtn.addEventListener('click', toggleMobileMenu);
+    if (backdrop) backdrop.addEventListener('click', closeMobileMenu);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeMobileMenu();
+    });
 
     document.getElementById('sidebar-nav').addEventListener('click', function (e) {
       var target = e.target.closest('.nav-item');
@@ -132,5 +189,6 @@
       var titleEl = document.getElementById('page-title');
       if (titleEl) titleEl.textContent = target.querySelector('.label').textContent;
       renderView(target.getAttribute('data-page'));
+      closeMobileMenu(); // pilih menu -> drawer otomatis tertutup di mobile
     });
   });
