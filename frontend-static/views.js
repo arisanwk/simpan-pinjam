@@ -3,7 +3,24 @@
 // item sidebar diklik. Semua data lewat apiCall() (api.js) -- TIDAK PERNAH
 // membaca Google Sheet langsung dari sini (Tahap 4 §52).
 
-var membersCache = []; // di-refresh setiap kali halaman yang butuh daftar anggota dibuka
+var membersCache = []; // diisi lewat ensureMembersLoaded() -- lihat catatan performa di bawah
+var membersCacheLoaded = false;
+
+/**
+ * PERFORMA: sebelumnya HAMPIR SETIAP halaman (Simpanan/Infaq/Pinjaman/
+ * Pembayaran/Laporan) memanggil getMembers() ulang setiap dibuka, padahal
+ * daftar anggota jarang berubah dalam satu sesi -- tiap panggilan itu satu
+ * round-trip penuh ke Apps Script (yang sendirinya sudah punya latensi
+ * cukup tinggi per request). Sekarang: hanya di-fetch SEKALI per sesi
+ * lewat fungsi ini; renderAnggotaList() (satu-satunya halaman yang benar-
+ * benar butuh data paling baru untuk CRUD) tetap fetch langsung & mengisi
+ * ulang cache ini supaya halaman lain otomatis ikut ter-perbarui juga.
+ */
+async function ensureMembersLoaded() {
+  if (membersCacheLoaded) return;
+  var res = await apiCall('getMembers', {});
+  if (res.success) { membersCache = res.data; membersCacheLoaded = true; }
+}
 
 /** Cegah XSS (Tahap 6 §35) -- SETIAP data dari server yang disisipkan ke
  * innerHTML lewat string wajib lewat fungsi ini. */
@@ -137,6 +154,7 @@ async function renderAnggotaList() {
   var res = await apiCall('getMembers', {});
   if (!res.success) return showError(res.error);
   membersCache = res.data;
+  membersCacheLoaded = true; // halaman lain (Simpanan/Infaq/dst.) ikut dapat data terbaru ini
   var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
 
   var rows = res.data.map(function (m) {
@@ -175,15 +193,21 @@ var currentDetailMemberId = null;
 async function renderAnggotaDetail(memberId) {
   setPageTitle('Detail Anggota');
   showLoading();
-  var res = await apiCall('getMember', { memberId: memberId });
+  // PERFORMA: 5 panggilan ini SALING BEBAS (tidak butuh hasil satu sama
+  // lain) tapi sebelumnya dijalankan satu-satu (await berurutan) --
+  // artinya total waktu tunggu = jumlah SEMUA latensi request, bukan cuma
+  // yang paling lambat. Promise.all menjalankannya bersamaan.
+  var results = await Promise.all([
+    apiCall('getMember', { memberId: memberId }),
+    apiCall('getSavings', { filter: { member_id: memberId } }),
+    apiCall('getInfaqList', { filter: { member_id: memberId } }),
+    apiCall('getLoans', { filter: { member_id: memberId } }),
+    apiCall('getMemberPayments', { memberId: memberId })
+  ]);
+  var res = results[0], savingsRes = results[1], infaqRes = results[2], loansRes = results[3], paymentsRes = results[4];
   if (!res.success) return showError(res.error);
   var m = res.data;
   var st = getSimpleStatusView(m.status);
-
-  var savingsRes = await apiCall('getSavings', { filter: { member_id: memberId } });
-  var infaqRes = await apiCall('getInfaqList', { filter: { member_id: memberId } });
-  var loansRes = await apiCall('getLoans', { filter: { member_id: memberId } });
-  var paymentsRes = await apiCall('getMemberPayments', { memberId: memberId });
 
   contentArea().innerHTML =
     '<button class="btn btn-ghost text-small" id="btn-back-anggota" style="margin-bottom:var(--space-4);">&larr; Kembali ke Daftar Anggota</button>' +
@@ -269,9 +293,7 @@ function selectField(label, name, options, required) {
 async function renderSimpananList() {
   setPageTitle('Simpanan');
   showLoading();
-  var membersRes = await apiCall('getMembers', {});
-  if (!membersRes.success) return showError(membersRes.error);
-  membersCache = membersRes.data;
+  await ensureMembersLoaded();
 
   var res = await apiCall('getSavings', {});
   if (!res.success) return showError(res.error);
@@ -323,8 +345,7 @@ function openSimpananForm() {
 async function renderInfaqList() {
   setPageTitle('Infaq');
   showLoading();
-  var membersRes = await apiCall('getMembers', {});
-  if (membersRes.success) membersCache = membersRes.data;
+  await ensureMembersLoaded();
 
   var res = await apiCall('getInfaqList', {});
   if (!res.success) return showError(res.error);
@@ -375,8 +396,7 @@ function openInfaqForm() {
 async function renderPinjamanList(openFormDirectly) {
   setPageTitle('Daftar Pinjaman');
   showLoading();
-  var membersRes = await apiCall('getMembers', {});
-  if (membersRes.success) membersCache = membersRes.data;
+  await ensureMembersLoaded();
 
   var res = await apiCall('getLoans', {});
   if (!res.success) return showError(res.error);
@@ -463,8 +483,7 @@ function openPinjamanForm() {
 async function renderPembayaran() {
   setPageTitle('Pembayaran');
   showLoading();
-  var membersRes = await apiCall('getMembers', {});
-  if (membersRes.success) membersCache = membersRes.data;
+  await ensureMembersLoaded();
 
   var res = await apiCall('getActiveLoans', {});
   if (!res.success) return showError(res.error);
@@ -582,8 +601,7 @@ async function renderLaporanBody(tabKey) {
   var body = document.getElementById('laporan-body');
   if (!body) return;
 
-  var membersRes = await apiCall('getMembers', {});
-  if (membersRes.success) membersCache = membersRes.data;
+  await ensureMembersLoaded();
 
   if (tabKey === 'anggota') {
     var rows = membersCache.map(function (m) {
