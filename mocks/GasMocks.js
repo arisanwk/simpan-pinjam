@@ -4,12 +4,13 @@
 // supaya logika di file .gs (yang murni JavaScript) bisa dijalankan & diuji
 // di sandbox tanpa akun Google/Spreadsheet sungguhan.
 
-function createMockSheet(name, headerRow) {
+function createMockSheet(name, headerRow, readCounter) {
   const rows = [headerRow.slice()];
   return {
     _name: name,
     getName() { return name; },
     getDataRange() {
+      if (readCounter) readCounter.count[name] = (readCounter.count[name] || 0) + 1;
       return { getValues() { return rows.map((r) => r.slice()); } };
     },
     getLastRow() { return rows.length; },
@@ -120,13 +121,17 @@ function buildGasGlobals(spreadsheet, scriptProps) {
  * Bangun mock spreadsheet dari fixture { SHEET_NAME: [ [header...], [row...], ... ] }
  * — dipakai untuk menguji CalculationService dkk terhadap data contoh yang
  * PERSIS sama dengan Database_Simpan_Pinjam.xlsx (lihat tests/fixtures).
+ *
+ * `readCounter` opsional: objek { count: {} } yang di-increment tiap kali
+ * getDataRange() dipanggil, per nama sheet — dipakai test performa untuk
+ * MEMBUKTIKAN jumlah pembacaan sheet berkurang, bukan cuma mengklaimnya.
  */
-function createMockSpreadsheetFromFixture(fixture) {
+function createMockSpreadsheetFromFixture(fixture, readCounter) {
   const sheets = {};
   Object.keys(fixture).forEach((name) => {
     const rows = fixture[name];
     const header = rows[0] || [];
-    const sheet = createMockSheet(name, header);
+    const sheet = createMockSheet(name, header, readCounter);
     for (let i = 1; i < rows.length; i++) {
       sheet.appendRow(rows[i]);
     }
