@@ -79,7 +79,7 @@
   function renderSidebar(currentUser, activeKey) {
     var root = document.getElementById('sidebar-nav');
     if (!root) return;
-    var html = '<div class="brand"><img src="assets/pks.png" alt="Logo PKS" class="brand-logo"><span class="brand-copy"><strong>ARISAN WK</strong><small>Wanita Keadilan</small></span></div>';
+    var html = '<div class="brand">Simpan Pinjam</div>';
     NAV_STRUCTURE.forEach(function (entry) {
       if (entry.group) {
         var visibleItems = entry.items.filter(function (it) { return it.roles.indexOf(currentUser.role) > -1; });
@@ -110,24 +110,11 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     // Render awal (sidebar/header) dilakukan auth.js lewat onLoginSuccess()
-    // setelah login/verifikasi token berhasil -- bukan di sini lagi.
+    // setelah login/verifikasi token berhasil. initGoogleSignIn() TIDAK
+    // dipanggil langsung di sini lagi -- tryRestoreSession() yang
+    // memutuskan: pulihkan sesi tersimpan, coba auto-sign-in diam-diam,
+    // atau baru render tombol manual sebagai fallback (lihat auth.js).
     tryRestoreSession();
-    initGoogleSignIn();
-
-    var menuBtn = document.getElementById('mobile-menu-btn');
-    var sidebar = document.getElementById('sidebar-nav');
-    var backdrop = document.getElementById('sidebar-backdrop');
-    function closeMobileMenu() {
-      if (sidebar) sidebar.classList.remove('open');
-      if (backdrop) backdrop.classList.remove('open');
-      if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
-    }
-    if (menuBtn) menuBtn.addEventListener('click', function () {
-      var isOpen = sidebar.classList.toggle('open');
-      backdrop.classList.toggle('open', isOpen);
-      menuBtn.setAttribute('aria-expanded', String(isOpen));
-    });
-    if (backdrop) backdrop.addEventListener('click', closeMobileMenu);
 
     document.getElementById('sidebar-nav').addEventListener('click', function (e) {
       var target = e.target.closest('.nav-item');
@@ -138,6 +125,5 @@
       var titleEl = document.getElementById('page-title');
       if (titleEl) titleEl.textContent = target.querySelector('.label').textContent;
       renderView(target.getAttribute('data-page'));
-      closeMobileMenu();
     });
   });

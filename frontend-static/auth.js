@@ -1,5 +1,5 @@
 // auth.js
-// Login memakai Google Identity Services (GSI). Alur:
+// Login memakai Google Identity Services (GSI). Alur normal:
 //   1. Tombol "Sign in with Google" dirender GSI (bukan tombol custom).
 //   2. User pilih akun -> GSI panggil handleCredentialResponse() dengan
 //      ID token (JWT) yang SUDAH ditandatangani Google -- frontend TIDAK
@@ -13,6 +13,17 @@
 // request lain ke backend tetap menyertakan idToken dan diverifikasi ULANG
 // di server (lihat Code.gs) -- currentUser di client murni untuk keperluan
 // tampilan (render menu sesuai role), bukan sumber otorisasi.
+//
+// "Tetap login besok tanpa klik apapun": token ID Google cuma berlaku
+// ~1 jam, jadi menyimpannya lama sendirian tidak cukup. Solusinya dua
+// lapis (lihat tryRestoreSession()):
+//   (a) token tersimpan (localStorage) dicoba dulu -- cepat, cukup untuk
+//       "buka lagi beberapa menit/jam kemudian";
+//   (b) kalau sudah kedaluwarsa/tidak ada, coba Google One Tap auto-select
+//       (attemptSilentSignIn()) -- selama user MASIH login Google di
+//       browser/HP itu, Google akan memberi token baru tanpa user klik
+//       apapun. Hanya kalau ini juga gagal (mis. sudah logout dari Google,
+//       atau ganti akun), baru layar login manual (tombol) ditampilkan.
 
 let currentUser = null;
 
@@ -35,6 +46,36 @@ function initGoogleSignIn() {
   );
 }
 
+/**
+ * Coba minta token baru dari Google TANPA menampilkan dialog pemilihan
+ * akun (auto_select) -- ini yang membuat "buka besok tidak perlu login
+ * lagi" bekerja, selama browser/HP masih dalam sesi Google yang sama.
+ * Kalau Google TIDAK BISA/TIDAK MAU melakukan ini diam-diam (belum pernah
+ * login sebelumnya, banyak akun tersedia, atau One Tap pernah ditutup
+ * berkali-kali oleh user), tampilkan layar login manual sebagai fallback
+ * -- ini kondisi NORMAL, bukan error.
+ */
+function attemptSilentSignIn() {
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+    setTimeout(attemptSilentSignIn, 200);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: window.APP_CONFIG.GOOGLE_CLIENT_ID,
+    callback: handleCredentialResponse,
+    auto_select: true
+  });
+  google.accounts.id.prompt(function (notification) {
+    var silentFailed =
+      (typeof notification.isNotDisplayed === 'function' && notification.isNotDisplayed()) ||
+      (typeof notification.isSkippedMoment === 'function' && notification.isSkippedMoment());
+    if (silentFailed) {
+      showLoginScreen();
+      initGoogleSignIn();
+    }
+  });
+}
+
 async function handleCredentialResponse(response) {
   setStoredIdToken(response.credential);
   showLoginLoading();
@@ -53,24 +94,28 @@ async function handleCredentialResponse(response) {
   onLoginSuccess(currentUser);
 }
 
-/** Dipanggil saat halaman dimuat -- coba pulihkan sesi dari token tersimpan. */
+/**
+ * Dipanggil saat halaman dimuat. Urutan: (1) token tersimpan kalau ada &
+ * masih valid -> langsung masuk, cepat; (2) kalau tidak ada/sudah
+ * kedaluwarsa -> coba auto-sign-in diam-diam; (3) kalau itu juga gagal ->
+ * layar login manual (ditangani di dalam attemptSilentSignIn()).
+ */
 async function tryRestoreSession() {
   const token = getStoredIdToken();
-  if (!token) {
-    showLoginScreen();
-    return;
-  }
-  showLoginLoading();
-  const result = await apiCall('login', {});
-  if (!result.success) {
-    // Token kedaluwarsa (~1 jam) atau tidak valid lagi -- minta login ulang,
-    // JANGAN tampilkan sebagai error mencolok, ini kondisi normal.
+  if (token) {
+    showLoginLoading();
+    const result = await apiCall('login', {});
+    if (result.success) {
+      currentUser = result.data;
+      onLoginSuccess(currentUser);
+      return;
+    }
+    // Token tersimpan sudah tidak valid (kedaluwarsa ~1 jam, dst.) --
+    // JANGAN tampilkan sebagai error mencolok, ini kondisi normal. Buang,
+    // lalu coba jalur auto-sign-in diam-diam di bawah.
     setStoredIdToken(null);
-    showLoginScreen();
-    return;
   }
-  currentUser = result.data;
-  onLoginSuccess(currentUser);
+  attemptSilentSignIn();
 }
 
 function signOut() {

@@ -46,12 +46,16 @@ async function apiCall(action, payload) {
   return json;
 }
 
-// --- Penyimpanan idToken (in-memory + sessionStorage, BUKAN localStorage:
-//     token Google berumur pendek ~1 jam, tidak perlu/baik disimpan permanen) ---
+// --- Penyimpanan idToken (localStorage: bertahan lintas sesi browser --
+//     ditutup lalu dibuka lagi besok pun tetap ada. Token Google sendiri
+//     cuma berlaku ~1 jam, jadi menyimpannya lama TIDAK cukup sendirian --
+//     auth.js memakai auto-sign-in diam-diam (Google One Tap) sebagai
+//     jaring pengaman begitu token tersimpan ini kedaluwarsa, lihat
+//     attemptSilentSignIn() di auth.js.) ---
 function getStoredIdToken() {
-  return sessionStorage.getItem('sp_id_token') || null;
+  return localStorage.getItem('sp_id_token') || null;
 }
 function setStoredIdToken(token) {
-  if (token) sessionStorage.setItem('sp_id_token', token);
-  else sessionStorage.removeItem('sp_id_token');
+  if (token) localStorage.setItem('sp_id_token', token);
+  else localStorage.removeItem('sp_id_token');
 }
