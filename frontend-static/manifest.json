@@ -1,0 +1,16 @@
+{
+  "name": "ARISAN WK - Wanita Keadilan",
+  "short_name": "ARISAN WK",
+  "description": "Aplikasi Simpan Pinjam ARISAN WK - Wanita Keadilan",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f7fb",
+  "theme_color": "#176b57",
+  "lang": "id",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
