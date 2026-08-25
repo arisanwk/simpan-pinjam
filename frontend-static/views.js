@@ -131,7 +131,7 @@ async function renderDashboard() {
   if (!res.success) return showError(res.error);
   var d = res.data;
   contentArea().innerHTML =
-    '<div class="grid-summary" style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-4);">' +
+    '<div class="grid-summary">' +
       summaryCard('Total Anggota', d.totalAnggota, d.anggotaAktif + ' aktif') +
       summaryCard('Total Simpanan', formatRupiah(d.totalSimpanan), 'Wajib ' + formatRupiah(d.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d.totalSimpananSukarela)) +
       summaryCard('Total Infaq', formatRupiah(d.totalInfaq), 'Terpisah dari simpanan') +
@@ -215,7 +215,7 @@ async function renderAnggotaDetail(memberId) {
     '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
       '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
       ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div></div>' +
-    '<div class="grid-summary" style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-4); margin-bottom:var(--space-6);">' +
+    '<div class="grid-summary mb-6">' +
       summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
       summaryCard('Total Simpanan', formatRupiah(m.savings.total), '') +
@@ -714,7 +714,7 @@ async function loadPeriodeReport() {
   var d = res.data;
   resultEl.innerHTML =
     '<p class="text-small text-muted">Aktivitas transaksi PADA PERIODE ini -- berbeda dari saldo terkini di Dashboard (lihat Tahap 5 §36).</p>' +
-    '<div class="grid-summary" style="display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-4);">' +
+    '<div class="grid-summary">' +
       summaryCard('Simpanan Wajib', formatRupiah(d.simpananWajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(d.simpananSukarela), '') +
       summaryCard('Infaq', formatRupiah(d.infaq), '') +
@@ -899,7 +899,7 @@ async function renderDataSaya() {
     '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
       '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
       ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div></div>' +
-    '<div class="grid-summary" style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-4); margin-bottom:var(--space-6);">' +
+    '<div class="grid-summary mb-6">' +
       summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
       summaryCard('Total Simpanan', formatRupiah(m.savings.total), '') +

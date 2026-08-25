@@ -264,6 +264,7 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
 .content { padding: 28px; flex: 1; max-width: 1600px; width: 100%; margin: 0 auto; }
 .content-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--space-5); }
 .content-header h1 { font-size: 22px !important; }
+.mb-6 { margin-bottom: var(--space-6); }
 
 .grid-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 
