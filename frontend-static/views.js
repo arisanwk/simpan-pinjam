@@ -479,9 +479,29 @@ function openAnggotaForm() {
     });
 }
 
+function parseRupiahInput(value) {
+  var digits = String(value == null ? '' : value).replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}
+function formatRupiahInput(value) {
+  var digits = String(value == null ? '' : value).replace(/\D/g, '');
+  return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+}
+// Semua input nominal Rupiah otomatis memakai pemisah ribuan Indonesia saat diketik.
+// Nilai dikonversi kembali menjadi angka murni sebelum dikirim ke backend.
+if (!window.__rupiahInputListenerInstalled) {
+  window.__rupiahInputListenerInstalled = true;
+  document.addEventListener('input', function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains('rupiah-input')) return;
+    el.value = formatRupiahInput(el.value);
+  });
+}
 function field(label, name, required, type) {
+  var isRupiah = type === 'number' && /nominal/i.test(name);
   return '<div class="field"><label>' + escapeHtml(label) + (required ? '<span class="required">*</span>' : '') + '</label>' +
-         '<input class="input" name="' + name + '" type="' + (type || 'text') + '"' + (required ? ' required' : '') + '></div>';
+         '<input class="input' + (isRupiah ? ' rupiah-input' : '') + '" name="' + name + '" type="' + (isRupiah ? 'text' : (type || 'text')) + '"' +
+         (isRupiah ? ' inputmode="numeric" autocomplete="off"' : '') + (required ? ' required' : '') + '></div>';
 }
 function selectField(label, name, options, required) {
   var opts = options.map(function (o) { return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>'; }).join('');
@@ -530,7 +550,7 @@ function openSimpananForm() {
       setModalSubmitting(true);
       var res = await apiCall('createSaving', {
         member_id: formData.get('member_id'), jenis: formData.get('jenis'),
-        nominal: Number(formData.get('nominal')), keterangan: formData.get('keterangan'),
+        nominal: parseRupiahInput(formData.get('nominal')), keterangan: formData.get('keterangan'),
         clientRequestId: cryptoRandomId()
       });
       setModalSubmitting(false);
@@ -613,7 +633,7 @@ async function openPenarikanSimpananForm(prefillMemberId) {
     async function (formData) {
       var memberId = formData.get('member_id');
       var jenis = formData.get('jenis');
-      var nominal = Number(formData.get('nominal'));
+      var nominal = parseRupiahInput(formData.get('nominal'));
       if (!memberId) { showToast('Pilih anggota terlebih dahulu.', 'danger'); return; }
       if (!nominal || nominal <= 0) { showToast('Nominal penarikan harus lebih dari 0.', 'danger'); return; }
       var maxSaldo = Number(document.querySelector('[name="nominal"]').max || 0);
@@ -708,7 +728,7 @@ function openInfaqForm() {
     async function (formData) {
       setModalSubmitting(true);
       var res = await apiCall('createInfaq', {
-        member_id: formData.get('member_id') || '', nominal: Number(formData.get('nominal')),
+        member_id: formData.get('member_id') || '', nominal: parseRupiahInput(formData.get('nominal')),
         keterangan: formData.get('keterangan'), clientRequestId: cryptoRandomId()
       });
       setModalSubmitting(false);
@@ -802,7 +822,7 @@ function openDisburseForm(loanId, nominalPengajuan) {
     '<p class="text-muted">Nominal pengajuan: <strong class="amount">' + escapeHtml(formatRupiah(nominalPengajuan)) + '</strong></p>' +
     field('Nominal Pencairan (Rp)', 'nominal_pencairan', true, 'number'),
     async function (formData) {
-      var nominal = Number(formData.get('nominal_pencairan'));
+      var nominal = parseRupiahInput(formData.get('nominal_pencairan'));
       setModalSubmitting(true, 'Cairkan');
       var res = await apiCall('disburseLoan', { loanId: loanId, nominalPencairan: nominal });
       setModalSubmitting(false);
@@ -813,7 +833,7 @@ function openDisburseForm(loanId, nominalPengajuan) {
     });
   var form = document.getElementById('dynamic-modal-form');
   var input = form.querySelector('[name="nominal_pencairan"]');
-  if (input) input.value = nominalPengajuan || '';
+  if (input) input.value = formatRupiahInput(nominalPengajuan || '');
 }
 
 function openPinjamanForm() {
@@ -826,7 +846,7 @@ function openPinjamanForm() {
     async function (formData) {
       setModalSubmitting(true, 'Ajukan');
       var res = await apiCall('createLoanApplication', {
-        member_id: formData.get('member_id'), nominal_pengajuan: Number(formData.get('nominal_pengajuan')),
+        member_id: formData.get('member_id'), nominal_pengajuan: parseRupiahInput(formData.get('nominal_pengajuan')),
         tujuan: formData.get('tujuan'), clientRequestId: cryptoRandomId()
       });
       setModalSubmitting(false);
@@ -873,7 +893,7 @@ function openPembayaranForm(loanId, sisa) {
     field('Nominal Pembayaran (Rp)', 'nominal', true, 'number') +
     field('Keterangan', 'keterangan', false),
     async function (formData) {
-      var nominal = Number(formData.get('nominal'));
+      var nominal = parseRupiahInput(formData.get('nominal'));
       setModalSubmitting(true, 'Simpan Pembayaran');
       var res = await apiCall('createPayment', {
         loan_id: loanId, nominal: nominal, keterangan: formData.get('keterangan'),
