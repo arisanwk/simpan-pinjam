@@ -10,14 +10,6 @@
   <style>
     /* Khusus layar login -- tidak masuk styles.css karena bukan bagian
        design system komponen umum, murni layout halaman ini. */
-    #login-screen {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: var(--space-4); background: var(--color-surface);
-    }
-    #login-screen .login-card {
-      background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm); padding: var(--space-8); text-align: center; width: 360px; max-width: calc(100vw - 32px);
-    }
     #login-loading, #login-error { display: none; margin-top: var(--space-4); }
     #login-error { color: var(--status-danger); font-size: var(--fs-small); }
   </style>
@@ -36,13 +28,13 @@
   <div id="login-screen" class="no-print">
     <div class="login-card">
       <div class="login-brand">
-        <img src="assets/pks.png" alt="Logo PKS" class="login-logo">
+        <img src="assets/pks.png" alt="Logo" class="login-logo">
         <div>
           <h1>ARISAN WK</h1>
           <div class="brand-subtitle">Wanita Keadilan</div>
         </div>
       </div>
-      <p class="text-muted login-tagline">Aplikasi Simpan Pinjam • Masuk dengan akun Google Anda.</p>
+      <p class="text-muted login-tagline">Aplikasi Simpan Pinjam &middot; Masuk dengan akun Google Anda.</p>
       <div id="google-signin-button" style="display:flex; justify-content:center; margin-top: var(--space-4);"></div>
       <div id="login-loading" class="text-small text-muted">Memeriksa sesi...</div>
       <div id="login-error"></div>
@@ -56,10 +48,11 @@
 
     <div class="main-col">
       <header class="header no-print">
-        <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Buka menu" aria-expanded="false">☰</button>
+        <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Buka menu" aria-expanded="false"></button>
         <div class="page-title" id="page-title">Dashboard</div>
         <div class="header-right">
           <div class="search">
+            <svg class="icon icon-sm search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input class="input" type="search" placeholder="Cari anggota, pinjaman..." aria-label="Pencarian global">
           </div>
           <div class="user-chip" id="header-user-chip"></div>
@@ -82,6 +75,7 @@
   <script src="config.js"></script>
   <script src="api.js"></script>
   <script src="auth.js"></script>
+  <script src="icons.js"></script>
   <script src="views.js"></script>
   <script src="app.js"></script>
 </body>

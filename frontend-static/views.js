@@ -143,9 +143,27 @@ async function renderDashboard() {
     '</div>';
 }
 function summaryCard(label, value, sub) {
-  return '<div class="card summary-card"><div class="label">' + escapeHtml(label) + '</div>' +
+  return '<div class="card summary-card"><div class="icon-badge">' + icon(inferCardIcon(label)) + '</div>' +
+         '<div class="label">' + escapeHtml(label) + '</div>' +
          '<div class="value amount">' + escapeHtml(value) + '</div>' +
          (sub ? '<div class="sub">' + escapeHtml(sub) + '</div>' : '') + '</div>';
+}
+
+/** Tebak ikon yang paling relevan dari teks label kartu -- supaya tiap
+ * ringkasan (Dashboard/Detail Anggota/Data Saya/Rekap Periode) otomatis
+ * dapat ikon yang sesuai tanpa perlu mengubah puluhan titik pemanggilan
+ * summaryCard() satu-satu. */
+function inferCardIcon(label) {
+  if (/pembayaran|dibayar/i.test(label)) return 'creditCard';
+  if (/piutang/i.test(label)) return 'trendingUp';
+  if (/lunas/i.test(label)) return 'checkCircle';
+  if (/aktif/i.test(label) && /pinjaman/i.test(label)) return 'clock';
+  if (/pinjaman/i.test(label)) return 'fileText';
+  if (/simpanan/i.test(label)) return 'dollarSign';
+  if (/infaq/i.test(label)) return 'gift';
+  if (/anggota/i.test(label)) return 'users';
+  if (/transaksi/i.test(label)) return 'barChart';
+  return 'dollarSign';
 }
 
 /* ============================================================ ANGGOTA */
@@ -161,9 +179,9 @@ async function renderAnggotaList() {
   var rows = res.data.map(function (m) {
     var st = getSimpleStatusView(m.status);
     var aksi = canEdit
-      ? '<button class="btn btn-secondary text-small" data-action="edit-member" data-member="' + escapeHtml(m.member_id) + '">Edit</button> ' +
+      ? '<button class="btn btn-secondary text-small" data-action="edit-member" data-member="' + escapeHtml(m.member_id) + '">' + icon('edit', 'icon-sm') + 'Edit</button> ' +
         '<button class="btn ' + (m.status === 'AKTIF' ? 'btn-danger' : 'btn-secondary') + ' text-small" data-action="toggle-member" data-member="' + escapeHtml(m.member_id) + '" data-status="' + escapeHtml(m.status) + '">' +
-        (m.status === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button>'
+        (m.status === 'AKTIF' ? (icon('xCircle', 'icon-sm') + 'Nonaktifkan') : (icon('checkCircle', 'icon-sm') + 'Aktifkan')) + '</button>'
       : '';
     return '<tr class="row-clickable" data-member-id="' + escapeHtml(m.member_id) + '" style="cursor:pointer;">' +
       '<td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td>' +
@@ -176,10 +194,10 @@ async function renderAnggotaList() {
 
   contentArea().innerHTML =
     '<div class="content-header"><h1 style="margin:0;">Daftar Anggota</h1>' +
-    (canEdit ? '<button class="btn btn-primary" id="btn-add-anggota">+ Tambah Anggota</button>' : '') +
+    (canEdit ? '<button class="btn btn-primary" id="btn-add-anggota">' + icon('plus') + 'Tambah Anggota</button>' : '') +
     '</div>' +
     (res.data.length === 0
-      ? '<div class="empty-state">Belum ada anggota.' + (canEdit ? '<br><button class="btn btn-secondary" id="btn-add-anggota-empty">+ Tambah Anggota</button>' : '') + '</div>'
+      ? '<div class="empty-state">Belum ada anggota.' + (canEdit ? '<br><button class="btn btn-secondary" id="btn-add-anggota-empty">' + icon('plus') + 'Tambah Anggota</button>' : '') + '</div>'
       : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nomor</th><th>Nama</th><th>No HP</th><th>Status</th>' + (canEdit ? '<th>Aksi</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
 
   ['btn-add-anggota', 'btn-add-anggota-empty'].forEach(function (id) {
@@ -283,11 +301,11 @@ async function renderAnggotaDetail(memberId) {
   var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
 
   contentArea().innerHTML =
-    '<button class="btn btn-ghost text-small" id="btn-back-anggota" style="margin-bottom:var(--space-4);">&larr; Kembali ke Daftar Anggota</button>' +
+    '<button class="btn btn-ghost text-small" id="btn-back-anggota" style="margin-bottom:var(--space-4);">' + icon('arrowLeft', 'icon-sm') + 'Kembali ke Daftar Anggota</button>' +
     '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
       '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
       ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div>' +
-      (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">Edit</button>' : '') +
+      (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">' + icon('edit', 'icon-sm') + 'Edit</button>' : '') +
     '</div>' +
     '<div class="grid-summary mb-6">' +
       summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
@@ -390,7 +408,7 @@ async function renderSimpananList() {
 
   contentArea().innerHTML =
     '<div class="content-header"><h1 style="margin:0;">Simpanan</h1>' +
-    (canEdit ? '<button class="btn btn-primary" id="btn-add-simpanan">+ Catat Simpanan</button>' : '') + '</div>' +
+    (canEdit ? '<button class="btn btn-primary" id="btn-add-simpanan">' + icon('plus') + 'Catat Simpanan</button>' : '') + '</div>' +
     (res.data.length === 0
       ? '<div class="empty-state">Belum ada transaksi simpanan.</div>'
       : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Anggota</th><th>Jenis</th><th class="col-amount">Nominal</th><th>Petugas</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
@@ -442,7 +460,7 @@ async function renderInfaqList() {
 
   contentArea().innerHTML =
     '<div class="content-header"><h1 style="margin:0;">Infaq</h1>' +
-    (canEdit ? '<button class="btn btn-primary" id="btn-add-infaq">+ Catat Infaq</button>' : '') + '</div>' +
+    (canEdit ? '<button class="btn btn-primary" id="btn-add-infaq">' + icon('plus') + 'Catat Infaq</button>' : '') + '</div>' +
     (summaryRes.success ? '<p class="text-muted">Total Infaq: <strong class="amount">' + escapeHtml(formatRupiah(summaryRes.data.total)) + '</strong></p>' : '') +
     (res.data.length === 0
       ? '<div class="empty-state">Belum ada transaksi infaq.</div>'
@@ -487,10 +505,10 @@ async function renderPinjamanList(openFormDirectly) {
   var rows = res.data.map(function (l) {
     var actions = '';
     if (isAdmin && l.status === 'DIAJUKAN') {
-      actions = '<button class="btn btn-secondary text-small" data-action="approve" data-loan="' + l.loan_id + '">Setujui</button> ' +
-                '<button class="btn btn-danger text-small" data-action="reject" data-loan="' + l.loan_id + '">Tolak</button>';
+      actions = '<button class="btn btn-secondary text-small" data-action="approve" data-loan="' + l.loan_id + '">' + icon('check', 'icon-sm') + 'Setujui</button> ' +
+                '<button class="btn btn-danger text-small" data-action="reject" data-loan="' + l.loan_id + '">' + icon('x', 'icon-sm') + 'Tolak</button>';
     } else if (isAdmin && l.status === 'DISETUJUI') {
-      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.nominalPengajuan + '">Cairkan</button>';
+      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.nominalPengajuan + '">' + icon('creditCard', 'icon-sm') + 'Cairkan</button>';
     }
     // Sebelum dicairkan, "Total Pinjaman" MEMANG Rp0 (belum ada uang yang
     // benar-benar keluar, lihat CalculationService.calcLoanCore_) -- supaya
@@ -508,7 +526,7 @@ async function renderPinjamanList(openFormDirectly) {
 
   contentArea().innerHTML =
     '<div class="content-header"><h1 style="margin:0;">Daftar Pinjaman</h1>' +
-    (canApply ? '<button class="btn btn-primary" id="btn-add-pinjaman">+ Pengajuan Pinjaman</button>' : '') + '</div>' +
+    (canApply ? '<button class="btn btn-primary" id="btn-add-pinjaman">' + icon('plus') + 'Pengajuan Pinjaman</button>' : '') + '</div>' +
     (res.data.length === 0
       ? '<div class="empty-state">Belum ada pinjaman.</div>'
       : '<div class="table-wrap"><table class="data-table"><thead><tr><th>No Pinjaman</th><th>Anggota</th><th class="col-amount">Pinjaman</th><th class="col-amount">Sisa</th><th>Status</th><th>Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
@@ -681,7 +699,7 @@ async function renderLaporan() {
   contentArea().innerHTML =
     '<div class="content-header no-print" style="align-items:flex-start;">' +
       '<div style="flex-wrap:wrap;">' + tabsHtml + '</div>' +
-      '<button class="btn btn-secondary" id="btn-cetak-laporan">🖶 Cetak Laporan</button>' +
+      '<button class="btn btn-secondary" id="btn-cetak-laporan">' + icon('printer', 'icon-sm') + 'Cetak Laporan</button>' +
     '</div>' +
     (visibleTabs.length < LAPORAN_TABS.length
       ? '<p class="text-small text-muted no-print">Sebagian laporan (per-anggota) tidak ditampilkan untuk role Anda -- lihat "Data Saya" untuk data pribadi.</p>'
@@ -871,11 +889,11 @@ async function renderUsers() {
       '<td data-label="Aksi">' + (isSelf ? '<span class="text-small text-muted">-</span>' :
         '<button class="btn btn-secondary text-small" data-user="' + u.user_id + '" data-action="role">Ubah Role</button> ' +
         '<button class="btn ' + (u.status === 'AKTIF' ? 'btn-danger' : 'btn-secondary') + ' text-small" data-user="' + u.user_id + '" data-action="toggle" data-status="' + u.status + '">' +
-        (u.status === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button>') + '</td></tr>';
+        (u.status === 'AKTIF' ? (icon('xCircle', 'icon-sm') + 'Nonaktifkan') : (icon('checkCircle', 'icon-sm') + 'Aktifkan')) + '</button>') + '</td></tr>';
   }).join('');
 
   contentArea().innerHTML =
-    '<div class="content-header"><h1 style="margin:0;">Pengguna</h1><button class="btn btn-primary" id="btn-add-user">+ Tambah User</button></div>' +
+    '<div class="content-header"><h1 style="margin:0;">Pengguna</h1><button class="btn btn-primary" id="btn-add-user">' + icon('plus') + 'Tambah User</button></div>' +
     '<div class="table-wrap"><table class="data-table"><thead><tr><th>Email</th><th>Nama</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 
   document.getElementById('btn-add-user').addEventListener('click', openUserForm);

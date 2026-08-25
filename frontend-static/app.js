@@ -64,8 +64,8 @@
 
   // ---- Definisi navigasi (§5 Prompt Tahap 4) dengan syarat role (Tahap 2 §K) ----
   var NAV_STRUCTURE = [
-    { key: 'dashboard', label: 'Dashboard', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
-    { key: 'data-saya', label: 'Data Saya', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
+    { key: 'dashboard', label: 'Dashboard', icon: 'home', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
+    { key: 'data-saya', label: 'Data Saya', icon: 'user', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] },
     { group: 'Data', items: [
       // Aturan visibilitas: PIMPINAN/VIEWER TIDAK boleh lihat data anggota
       // LAIN (hanya data umum/agregat + data pribadi sendiri lewat "Data
@@ -73,22 +73,22 @@
       // mencatat transaksi untuk anggota lain. Backend menegakkan ini juga
       // (BROAD_READ_ROLES di Config.gs) -- ini murni supaya menunya tidak
       // menyesatkan, bukan satu-satunya lapisan keamanan.
-      { key: 'anggota-list', label: 'Anggota', roles: ['ADMIN','PETUGAS'] },
-      { key: 'simpanan-list', label: 'Simpanan', roles: ['ADMIN','PETUGAS'] },
-      { key: 'infaq-list', label: 'Infaq', roles: ['ADMIN','PETUGAS'] }
+      { key: 'anggota-list', label: 'Anggota', icon: 'users', roles: ['ADMIN','PETUGAS'] },
+      { key: 'simpanan-list', label: 'Simpanan', icon: 'dollarSign', roles: ['ADMIN','PETUGAS'] },
+      { key: 'infaq-list', label: 'Infaq', icon: 'gift', roles: ['ADMIN','PETUGAS'] }
     ]},
     { group: 'Pinjaman', items: [
-      { key: 'pinjaman-list', label: 'Daftar Pinjaman', roles: ['ADMIN','PETUGAS'] },
-      { key: 'pinjaman-form', label: 'Pengajuan', roles: ['ADMIN','PETUGAS'] },
-      { key: 'pembayaran-form', label: 'Pembayaran', roles: ['ADMIN','PETUGAS'] }
+      { key: 'pinjaman-list', label: 'Daftar Pinjaman', icon: 'fileText', roles: ['ADMIN','PETUGAS'] },
+      { key: 'pinjaman-form', label: 'Pengajuan', icon: 'plusCircle', roles: ['ADMIN','PETUGAS'] },
+      { key: 'pembayaran-form', label: 'Pembayaran', icon: 'creditCard', roles: ['ADMIN','PETUGAS'] }
     ]},
     { group: 'Laporan', items: [
-      { key: 'laporan', label: 'Semua Laporan', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] }
+      { key: 'laporan', label: 'Semua Laporan', icon: 'barChart', roles: ['ADMIN','PETUGAS','PIMPINAN','VIEWER'] }
     ]},
     { group: 'Sistem', items: [
-      { key: 'users', label: 'Pengguna', roles: ['ADMIN'] },
-      { key: 'audit-log', label: 'Audit Log', roles: ['ADMIN'] },
-      { key: 'settings', label: 'Pengaturan', roles: ['ADMIN'] }
+      { key: 'users', label: 'Pengguna', icon: 'userCheck', roles: ['ADMIN'] },
+      { key: 'audit-log', label: 'Audit Log', icon: 'clock', roles: ['ADMIN'] },
+      { key: 'settings', label: 'Pengaturan', icon: 'settings', roles: ['ADMIN'] }
     ]}
   ];
 
@@ -117,6 +117,7 @@
   function navItemHtml(item, activeKey) {
     var activeClass = item.key === activeKey ? ' active' : '';
     return '<a class="nav-item' + activeClass + '" href="#" data-page="' + item.key + '">' +
+           (item.icon ? icon(item.icon, 'icon-sm') : '') +
            '<span class="label">' + item.label + '</span></a>';
   }
 
@@ -124,7 +125,7 @@
     var el = document.getElementById('header-user-chip');
     if (!el) return;
     el.innerHTML = '<span>' + currentUser.nama + '</span><span class="role">(' + currentUser.role + ')</span>' +
-                   ' <button type="button" class="btn btn-ghost text-small" id="logout-btn">Keluar</button>';
+                   ' <button type="button" class="btn btn-ghost text-small" id="logout-btn">' + icon('logOut', 'icon-sm') + 'Keluar</button>';
     document.getElementById('logout-btn').addEventListener('click', signOut);
   }
 
@@ -173,6 +174,7 @@
     tryRestoreSession();
 
     var menuBtn = document.getElementById('mobile-menu-btn');
+    if (menuBtn) menuBtn.innerHTML = icon('menu');
     var backdrop = document.getElementById('sidebar-backdrop');
     if (menuBtn) menuBtn.addEventListener('click', toggleMobileMenu);
     if (backdrop) backdrop.addEventListener('click', closeMobileMenu);

@@ -79,6 +79,16 @@ p { margin: 0 0 var(--space-2) 0; }
 
 .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 
+/* ---------------- Ikon (SVG inline, lihat icons.js) ---------------- */
+.icon { width: 18px; height: 18px; flex-shrink: 0; vertical-align: middle; }
+.icon-sm { width: 14px; height: 14px; }
+.icon-lg { width: 22px; height: 22px; }
+.summary-card .icon-badge {
+  width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: var(--color-primary-soft); color: var(--color-primary); margin-bottom: var(--space-2);
+}
+.summary-card .icon-badge .icon { width: 20px; height: 20px; }
+
 a { color: var(--color-primary); }
 
 a:focus-visible, button:focus-visible, input:focus-visible,
@@ -231,7 +241,7 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
 
 .sidebar .group-label { padding: 18px 12px 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: rgba(255, 255, 255, .42); font-weight: 700; }
 .sidebar a.nav-item {
-  display: flex; align-items: center; min-height: 42px;
+  display: flex; align-items: center; gap: 10px; min-height: 42px;
   padding: 10px 12px; margin: 2px 0; border-radius: 10px;
   color: rgba(255, 255, 255, .78); text-decoration: none; font-size: var(--fs-body);
   transition: .18s ease;
@@ -247,7 +257,9 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
 }
 .header .page-title { font-weight: 700; font-size: 19px; }
 .header .header-right { display: flex; align-items: center; gap: var(--space-4); }
-.header .search input { width: 260px; height: 40px; border-radius: 10px; background: #f8fafc; }
+.header .search { position: relative; }
+.header .search .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-muted); pointer-events: none; }
+.header .search input { width: 260px; height: 40px; border-radius: 10px; background: #f8fafc; padding-left: 36px; }
 .header .user-chip { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-small); padding-left: 12px; }
 .header .user-chip .role { color: var(--color-muted); }
 
