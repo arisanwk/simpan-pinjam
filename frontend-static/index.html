@@ -4,6 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ARISAN WK | Wanita Keadilan</title>
+
+  <!-- PWA -- supaya "Add to Home Screen" tampil layar penuh seperti
+       aplikasi asli (tanpa address bar browser), bukan sekadar bookmark.
+       Android/Chrome pakai manifest.json; iOS/Safari butuh meta tag
+       terpisah karena belum mendukung manifest.json sepenuhnya. -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#176b57">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ARISAN WK">
+  <link rel="apple-touch-icon" href="assets/pks.png">
+  <link rel="icon" type="image/png" href="assets/pks.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
