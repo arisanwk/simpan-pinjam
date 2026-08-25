@@ -520,23 +520,30 @@ async function renderSimpananList() {
   if (!res.success) return showError(res.error);
   var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
 
-  var rows = res.data.map(function (r) {
+  // Terbaru di atas agar transaksi yang baru dicatat/koreksi mudah ditemukan.
+  var data = (res.data || []).slice().reverse();
+  var rows = data.map(function (r) {
     return '<tr><td data-label="Tanggal">' + escapeHtml(r.tanggal) + '</td>' +
       '<td data-label="Anggota">' + escapeHtml(memberNameById(r.member_id)) + '</td>' +
       '<td data-label="Jenis"><span class="badge badge-neutral">' + escapeHtml(r.jenis) + '</span></td>' +
       '<td data-label="Nominal" class="col-amount amount">' + escapeHtml(formatRupiah(r.nominal)) + '</td>' +
-      '<td data-label="Petugas">' + escapeHtml(r.petugas) + '</td></tr>';
+      '<td data-label="Petugas">' + escapeHtml(r.petugas) + '</td>' +
+      (canEdit ? '<td data-label="Aksi" class="saving-action-cell"><button type="button" class="btn btn-secondary btn-edit-saving" data-id="' + escapeHtml(r.transaction_id) + '">' + icon('edit', 'icon-sm') + 'Koreksi</button></td>' : '') +
+      '</tr>';
   }).join('');
 
   contentArea().innerHTML =
-    '<div class="content-header"><h1 style="margin:0;">Simpanan</h1>' +
+    '<div class="content-header"><div><h1 style="margin:0;">Simpanan</h1><p class="content-subtitle">Catat setoran dan koreksi salah input tanpa menghapus jejak transaksi.</p></div>' +
     (canEdit ? '<button class="btn btn-primary" id="btn-add-simpanan">' + icon('plus') + 'Catat Simpanan</button>' : '') + '</div>' +
-    (res.data.length === 0
+    (data.length === 0
       ? '<div class="empty-state">Belum ada transaksi simpanan.</div>'
-      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Anggota</th><th>Jenis</th><th class="col-amount">Nominal</th><th>Petugas</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
+      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Anggota</th><th>Jenis</th><th class="col-amount">Nominal</th><th>Petugas</th>' + (canEdit ? '<th>Aksi</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
 
   var btn = document.getElementById('btn-add-simpanan');
   if (btn) btn.addEventListener('click', openSimpananForm);
+  Array.prototype.forEach.call(document.querySelectorAll('.btn-edit-saving'), function (el) {
+    el.addEventListener('click', function () { openEditSimpananForm(el.getAttribute('data-id')); });
+  });
 }
 
 function openSimpananForm() {
@@ -560,6 +567,52 @@ function openSimpananForm() {
       showToast('Simpanan berhasil dicatat: ' + res.data.transaction_id, 'success');
       renderSimpananList();
     });
+}
+
+async function openEditSimpananForm(transactionId) {
+  if (!transactionId) return;
+  var detail = await apiCall('getSaving', { transactionId: transactionId });
+  if (!detail.success) { showToast(detail.error.message, 'danger'); return; }
+  var r = detail.data;
+  var member = membersCache.filter(function (m) { return m.member_id === r.member_id; })[0];
+  var memberLabel = member ? (member.nama + ' (' + member.nomor_anggota + ')') : r.member_id;
+  var nominalFormatted = formatRupiahInput(r.nominal);
+  var tanggalValue = String(r.tanggal || '').slice(0, 10);
+
+  openModal('Koreksi Simpanan',
+    '<div class="alert alert-warning correction-note"><strong>Koreksi transaksi ' + escapeHtml(r.transaction_id) + '</strong><br>Transaksi lama tidak dihapus. Sistem akan menandainya VOID dan membuat transaksi pengganti agar riwayat audit tetap utuh.</div>' +
+    '<div class="field"><label>Anggota</label><input class="input" value="' + escapeHtml(memberLabel) + '" disabled><input type="hidden" name="member_id" value="' + escapeHtml(r.member_id) + '"></div>' +
+    '<div class="field"><label>Tanggal</label><input class="input" name="tanggal" type="date" value="' + escapeHtml(tanggalValue) + '"></div>' +
+    '<div class="field"><label>Jenis<span class="required">*</span></label><select class="select" name="jenis" required>' +
+      '<option value="WAJIB"' + (r.jenis === 'WAJIB' ? ' selected' : '') + '>Wajib</option>' +
+      '<option value="SUKARELA"' + (r.jenis === 'SUKARELA' ? ' selected' : '') + '>Sukarela</option></select></div>' +
+    '<div class="field"><label>Nominal (Rp)<span class="required">*</span></label><input class="input rupiah-input" name="nominal" type="text" inputmode="numeric" autocomplete="off" required value="' + escapeHtml(nominalFormatted) + '"></div>' +
+    '<div class="field"><label>Metode</label><select class="select" name="metode"><option value="TUNAI"' + (r.metode === 'TUNAI' ? ' selected' : '') + '>Tunai</option><option value="TRANSFER"' + (r.metode === 'TRANSFER' ? ' selected' : '') + '>Transfer</option></select></div>' +
+    '<div class="field"><label>Keterangan</label><input class="input" name="keterangan" value="' + escapeHtml(r.keterangan || '') + '"></div>',
+    async function (formData) {
+      var nominal = parseRupiahInput(formData.get('nominal'));
+      if (!nominal) { showToast('Nominal simpanan harus lebih dari 0.', 'danger'); return; }
+      setModalSubmitting(true, 'Simpan Koreksi');
+      var res = await apiCall('correctSaving', {
+        transactionId: transactionId,
+        patch: {
+          member_id: formData.get('member_id'),
+          tanggal: formData.get('tanggal'),
+          jenis: formData.get('jenis'),
+          nominal: nominal,
+          metode: formData.get('metode'),
+          keterangan: formData.get('keterangan')
+        },
+        clientRequestId: cryptoRandomId()
+      });
+      setModalSubmitting(false, 'Simpan Koreksi');
+      if (!res.success) { showToast(res.error.message, 'danger'); return; }
+      closeModal();
+      showToast('Simpanan berhasil dikoreksi. ' + res.data.corrected_from + ' → ' + res.data.transaction_id, 'success');
+      renderSimpananList();
+    });
+  var submit = document.getElementById('dynamic-modal-submit');
+  if (submit) submit.textContent = 'Simpan Koreksi';
 }
 
 /* ============================================================ TARIK SIMPANAN */

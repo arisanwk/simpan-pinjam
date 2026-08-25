@@ -596,3 +596,38 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
 .withdrawal-balance-box span { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
 .withdrawal-balance-box strong { font-size:18px; color:var(--text); }
 .withdrawal-balance-box small { color:var(--text-muted); }
+
+
+/* Kas tersedia pada form pengajuan pinjaman */
+.cash-availability-box {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border, #d9e1e8);
+  border-radius: 14px;
+  background: var(--surface-soft, #f7faf9);
+}
+.cash-availability-box span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted, #667085);
+}
+.cash-availability-box strong {
+  font-size: 24px;
+  line-height: 1.2;
+}
+.cash-availability-box small {
+  color: var(--text-muted, #667085);
+  line-height: 1.45;
+}
+
+
+/* Koreksi Simpanan */
+.saving-action-cell { white-space: nowrap; }
+.saving-action-cell .btn { min-height: 36px; padding: 7px 11px; font-size: 13px; }
+.content-subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; }
+.correction-note { line-height: 1.5; margin-bottom: 16px; }
+@media (max-width: 720px) {
+  .saving-action-cell .btn { width: 100%; justify-content: center; min-height: 42px; }
+}
