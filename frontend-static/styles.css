@@ -585,3 +585,14 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
   .member-detail-page table.data-table th, .member-detail-page table.data-table td { padding:5px 7px; }
   .member-detail-page table.data-table tr { break-inside:avoid; }
 }
+
+
+/* Modul Tarik Simpanan */
+.withdrawal-note { margin-bottom: var(--space-4); }
+.withdrawal-balance-box {
+  display:flex; flex-direction:column; gap:3px; padding:12px 14px; margin:-2px 0 14px;
+  border:1px solid var(--border); border-radius:12px; background:var(--surface-muted, #f8fafc);
+}
+.withdrawal-balance-box span { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+.withdrawal-balance-box strong { font-size:18px; color:var(--text); }
+.withdrawal-balance-box small { color:var(--text-muted); }

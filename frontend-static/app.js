@@ -75,6 +75,7 @@
       // menyesatkan, bukan satu-satunya lapisan keamanan.
       { key: 'anggota-list', label: 'Anggota', icon: 'users', roles: ['ADMIN','PETUGAS'] },
       { key: 'simpanan-list', label: 'Simpanan', icon: 'dollarSign', roles: ['ADMIN','PETUGAS'] },
+      { key: 'penarikan-simpanan', label: 'Tarik Simpanan', icon: 'arrowDownCircle', roles: ['ADMIN','PETUGAS'] },
       { key: 'infaq-list', label: 'Infaq', icon: 'gift', roles: ['ADMIN','PETUGAS'] }
     ]},
     { group: 'Pinjaman', items: [
@@ -184,7 +185,7 @@
       box.classList.add('open');
       return;
     }
-    var typeLabels = { ANGGOTA: 'Anggota', PINJAMAN: 'Pinjaman', PEMBAYARAN: 'Pembayaran', SIMPANAN: 'Simpanan', INFAQ: 'Infaq' };
+    var typeLabels = { ANGGOTA: 'Anggota', PINJAMAN: 'Pinjaman', PEMBAYARAN: 'Pembayaran', SIMPANAN: 'Simpanan', PENARIKAN_SIMPANAN: 'Tarik Simpanan', INFAQ: 'Infaq' };
     var grouped = {};
     items.forEach(function (it) {
       if (!grouped[it.type]) grouped[it.type] = [];

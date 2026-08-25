@@ -108,6 +108,7 @@ function renderView(pageKey) {
     case 'dashboard': return renderDashboard();
     case 'anggota-list': return renderAnggotaList();
     case 'simpanan-list': return renderSimpananList();
+    case 'penarikan-simpanan': return renderPenarikanSimpanan();
     case 'infaq-list': return renderInfaqList();
     case 'pinjaman-list': return renderPinjamanList();
     case 'pinjaman-form': return renderPinjamanList(true); // buka langsung form pengajuan
@@ -133,7 +134,8 @@ async function renderDashboard() {
   contentArea().innerHTML =
     '<div class="grid-summary">' +
       summaryCard('Total Anggota', d.totalAnggota, d.anggotaAktif + ' aktif') +
-      summaryCard('Total Simpanan', formatRupiah(d.totalSimpanan), 'Wajib ' + formatRupiah(d.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d.totalSimpananSukarela)) +
+      summaryCard('Total Simpanan', formatRupiah(d.totalSimpanan), 'Saldo bersih: Wajib ' + formatRupiah(d.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d.totalSimpananSukarela)) +
+      summaryCard('Total Penarikan', formatRupiah(d.totalPenarikanSimpanan || 0), 'Akumulasi penarikan simpanan') +
       summaryCard('Total Infaq', formatRupiah(d.totalInfaq), 'Terpisah dari simpanan') +
       summaryCard('Total Piutang', formatRupiah(d.totalPiutang), d.jumlahPinjamanAktif + ' pinjaman aktif') +
       summaryCard('Pinjaman Dicairkan', formatRupiah(d.totalPinjamanDicairkan), '') +
@@ -159,6 +161,7 @@ function inferCardIcon(label) {
   if (/lunas/i.test(label)) return 'checkCircle';
   if (/aktif/i.test(label) && /pinjaman/i.test(label)) return 'clock';
   if (/pinjaman/i.test(label)) return 'fileText';
+  if (/penarikan|tarik/i.test(label)) return 'arrowDownCircle';
   if (/simpanan/i.test(label)) return 'dollarSign';
   if (/infaq/i.test(label)) return 'gift';
   if (/anggota/i.test(label)) return 'users';
@@ -288,11 +291,12 @@ async function renderAnggotaDetail(memberId) {
   var results = await Promise.all([
     apiCall('getMember', { memberId: memberId }),
     apiCall('getSavings', { filter: { member_id: memberId } }),
+    apiCall('getMemberSavingWithdrawals', { memberId: memberId }),
     apiCall('getInfaqList', { filter: { member_id: memberId } }),
     apiCall('getLoans', { filter: { member_id: memberId } }),
     apiCall('getMemberPayments', { memberId: memberId })
   ]);
-  var res = results[0], savingsRes = results[1], infaqRes = results[2], loansRes = results[3], paymentsRes = results[4];
+  var res = results[0], savingsRes = results[1], withdrawalsRes = results[2], infaqRes = results[3], loansRes = results[4], paymentsRes = results[5];
   if (!res.success) return showError(res.error);
   var m = res.data;
   var st = getSimpleStatusView(m.status);
@@ -307,7 +311,7 @@ async function renderAnggotaDetail(memberId) {
         '<div class="member-detail-actions no-print">' +
           '<button class="btn btn-secondary text-small" id="btn-print-anggota">' + icon('printer', 'icon-sm') + 'Cetak / PDF</button>' +
           '<button class="btn btn-whatsapp text-small" id="btn-wa-anggota">' + icon('messageCircle', 'icon-sm') + 'Kirim WhatsApp</button>' +
-          (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">' + icon('edit', 'icon-sm') + 'Edit</button>' : '') +
+          (canEdit ? '<button class="btn btn-secondary text-small" id="btn-tarik-anggota-detail">' + icon('arrowDownCircle', 'icon-sm') + 'Tarik Simpanan</button><button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">' + icon('edit', 'icon-sm') + 'Edit</button>' : '') +
         '</div>' +
       '</div>' +
       '<section class="member-profile-card">' +
@@ -332,7 +336,8 @@ async function renderAnggotaDetail(memberId) {
         summaryCard('Total Dibayar', formatRupiah(m.loans.totalPembayaran), '') +
         summaryCard('Sisa Pinjaman', formatRupiah(m.loans.sisa), '') +
       '</div>' +
-      '<section class="member-history-section"><h2>Riwayat Simpanan</h2>' + renderMiniTable(savingsRes, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) + '</section>' +
+      '<section class="member-history-section"><h2>Riwayat Setoran Simpanan</h2>' + renderMiniTable(savingsRes, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) + '</section>' +
+      '<section class="member-history-section"><h2>Riwayat Penarikan Simpanan</h2>' + renderMiniTable(withdrawalsRes, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) + '</section>' +
       '<section class="member-history-section"><h2>Riwayat Infaq</h2>' + renderMiniTable(infaqRes, ['tanggal', 'nominal'], ['Tanggal', 'Nominal']) + '</section>' +
       '<section class="member-history-section"><h2>Pinjaman</h2>' + renderLoanMiniTable(loansRes) + '</section>' +
       '<section class="member-history-section"><h2>Riwayat Pembayaran</h2>' + renderMiniTable(paymentsRes, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']) + '</section>' +
@@ -341,6 +346,8 @@ async function renderAnggotaDetail(memberId) {
   document.getElementById('btn-back-anggota').addEventListener('click', renderAnggotaList);
   document.getElementById('btn-print-anggota').addEventListener('click', function () { printAnggotaDetail(m); });
   document.getElementById('btn-wa-anggota').addEventListener('click', function () { shareAnggotaViaWhatsApp(m); });
+  var tarikBtn = document.getElementById('btn-tarik-anggota-detail');
+  if (tarikBtn) tarikBtn.addEventListener('click', function () { openPenarikanSimpananForm(memberId); });
   var editBtn = document.getElementById('btn-edit-anggota-detail');
   if (editBtn) editBtn.addEventListener('click', function () {
     openEditAnggotaForm(m, function () { renderAnggotaDetail(memberId); });
@@ -405,6 +412,7 @@ function shareAnggotaViaWhatsApp(member) {
     'Wajib: ' + formatRupiah(member.savings && member.savings.wajib),
     'Sukarela: ' + formatRupiah(member.savings && member.savings.sukarela),
     'Total: ' + formatRupiah(member.savings && member.savings.total),
+    'Total Penarikan: ' + formatRupiah(member.savings && member.savings.penarikanTotal),
     '',
     '*Infaq*',
     'Total: ' + formatRupiah(member.infaqTotal),
@@ -531,6 +539,93 @@ function openSimpananForm() {
       showToast('Simpanan berhasil dicatat: ' + res.data.transaction_id, 'success');
       renderSimpananList();
     });
+}
+
+/* ============================================================ TARIK SIMPANAN */
+async function renderPenarikanSimpanan() {
+  setPageTitle('Tarik Simpanan');
+  showLoading();
+  await ensureMembersLoaded();
+  var results = await Promise.all([
+    apiCall('getSavingWithdrawals', {}),
+    apiCall('getSavingWithdrawalSummary', {})
+  ]);
+  var res = results[0], summaryRes = results[1];
+  if (!res.success) return showError(res.error);
+  var summary = summaryRes.success ? summaryRes.data : { wajib: 0, sukarela: 0, total: 0 };
+  var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
+
+  var rows = res.data.slice().reverse().map(function (r) {
+    return '<tr><td data-label="Tanggal">' + escapeHtml(r.tanggal) + '</td>' +
+      '<td data-label="Anggota">' + escapeHtml(memberNameById(r.member_id)) + '</td>' +
+      '<td data-label="Jenis"><span class="badge badge-warning">' + escapeHtml(r.jenis) + '</span></td>' +
+      '<td data-label="Nominal" class="col-amount amount">-' + escapeHtml(formatRupiah(r.nominal)) + '</td>' +
+      '<td data-label="Metode">' + escapeHtml(r.metode || '-') + '</td>' +
+      '<td data-label="Petugas">' + escapeHtml(r.petugas || '-') + '</td></tr>';
+  }).join('');
+
+  contentArea().innerHTML =
+    '<div class="content-header"><div><div class="eyebrow">TRANSAKSI SIMPANAN</div><h1 style="margin:2px 0 0;">Tarik Simpanan</h1>' +
+      '<p class="text-muted" style="margin:4px 0 0;">Penarikan tervalidasi terhadap saldo anggota dan tercatat pada audit log.</p></div>' +
+      (canEdit ? '<button class="btn btn-primary" id="btn-tarik-simpanan">' + icon('arrowDownCircle') + 'Tarik Simpanan</button>' : '') + '</div>' +
+    '<div class="grid-summary mb-6">' +
+      summaryCard('Total Penarikan', formatRupiah(summary.total), 'Akumulasi seluruh penarikan') +
+      summaryCard('Penarikan Wajib', formatRupiah(summary.wajib), '') +
+      summaryCard('Penarikan Sukarela', formatRupiah(summary.sukarela), '') +
+    '</div>' +
+    (res.data.length === 0 ? '<div class="empty-state">Belum ada penarikan simpanan.</div>' :
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Anggota</th><th>Jenis</th><th class="col-amount">Nominal</th><th>Metode</th><th>Petugas</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
+
+  var btn = document.getElementById('btn-tarik-simpanan');
+  if (btn) btn.addEventListener('click', openPenarikanSimpananForm);
+}
+
+function openPenarikanSimpananForm(prefillMemberId) {
+  var memberOptions = [{ value: '', label: 'Pilih anggota' }].concat(membersCache.filter(function (m) { return m.status === 'AKTIF'; })
+    .map(function (m) { return { value: m.member_id, label: m.nama + ' (' + m.nomor_anggota + ')' }; }));
+  openModal('Tarik Simpanan',
+    '<div class="alert alert-warning withdrawal-note">Nominal tidak dapat melebihi saldo jenis simpanan yang dipilih. Sistem akan memvalidasi ulang saldo saat transaksi disimpan.</div>' +
+    selectField('Anggota', 'member_id', memberOptions, true) +
+    '<div id="withdrawal-balance-box" class="withdrawal-balance-box"><span>Saldo tersedia</span><strong>Pilih anggota dan jenis simpanan</strong></div>' +
+    selectField('Jenis Simpanan', 'jenis', [{ value: 'SUKARELA', label: 'Sukarela' }, { value: 'WAJIB', label: 'Wajib' }], true) +
+    field('Nominal Penarikan (Rp)', 'nominal', true, 'number') +
+    selectField('Metode', 'metode', [{ value: 'TUNAI', label: 'Tunai' }, { value: 'TRANSFER', label: 'Transfer' }], true) +
+    field('Keterangan / Keperluan', 'keterangan', false),
+    async function (formData) {
+      var nominal = Number(formData.get('nominal'));
+      if (!nominal || nominal <= 0) { showToast('Nominal penarikan harus lebih dari 0.', 'danger'); return; }
+      setModalSubmitting(true, 'Proses Penarikan');
+      var res = await apiCall('createSavingWithdrawal', {
+        member_id: formData.get('member_id'), jenis: formData.get('jenis'), nominal: nominal,
+        metode: formData.get('metode'), keterangan: formData.get('keterangan'), clientRequestId: cryptoRandomId()
+      });
+      setModalSubmitting(false, 'Proses Penarikan');
+      if (!res.success) { showToast(res.error.message, 'danger'); return; }
+      closeModal();
+      showToast('Penarikan berhasil: ' + res.data.withdrawal_id + '. Saldo baru: ' + formatRupiah(res.data.saldo_baru.total), 'success');
+      renderPenarikanSimpanan();
+    });
+
+  var form = document.getElementById('dynamic-modal-form');
+  var memberSelect = form.querySelector('[name="member_id"]');
+  var jenisSelect = form.querySelector('[name="jenis"]');
+  var nominalInput = form.querySelector('[name="nominal"]');
+  if (prefillMemberId) memberSelect.value = prefillMemberId;
+  var refreshBalance = async function () {
+    var memberId = memberSelect.value;
+    var box = document.getElementById('withdrawal-balance-box');
+    if (!memberId) { box.innerHTML = '<span>Saldo tersedia</span><strong>Pilih anggota dan jenis simpanan</strong>'; return; }
+    box.innerHTML = '<span>Saldo tersedia</span><strong>Memuat...</strong>';
+    var balanceRes = await apiCall('getMemberSavings', { memberId: memberId });
+    if (!balanceRes.success) { box.innerHTML = '<span>Saldo tersedia</span><strong>Gagal memuat saldo</strong>'; return; }
+    var b = balanceRes.data;
+    var available = jenisSelect.value === 'WAJIB' ? b.wajib : b.sukarela;
+    box.innerHTML = '<span>Saldo ' + escapeHtml(jenisSelect.value.toLowerCase()) + '</span><strong class="amount">' + escapeHtml(formatRupiah(available)) + '</strong><small>Total simpanan: ' + escapeHtml(formatRupiah(b.total)) + '</small>';
+    nominalInput.max = String(Math.max(0, Number(available || 0)));
+  };
+  memberSelect.addEventListener('change', refreshBalance);
+  jenisSelect.addEventListener('change', refreshBalance);
+  if (prefillMemberId) refreshBalance();
 }
 
 /* ============================================================ INFAQ */
@@ -763,6 +858,7 @@ var LAPORAN_TABS = [
   { key: 'ringkasan', label: 'Ringkasan Keuangan', roles: ['ADMIN', 'PETUGAS', 'PIMPINAN', 'VIEWER'] },
   { key: 'anggota', label: 'Anggota', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'simpanan', label: 'Simpanan', roles: ['ADMIN', 'PETUGAS'] },
+  { key: 'penarikan-simpanan', label: 'Tarik Simpanan', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'infaq', label: 'Infaq', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'pinjaman', label: 'Semua Pinjaman', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'pinjaman-aktif', label: 'Pinjaman Aktif', roles: ['ADMIN', 'PETUGAS'] },
@@ -916,7 +1012,8 @@ async function renderLaporanBody(tabKey) {
       '<div class="report-section-head"><div><h2>Ringkasan Keuangan Terkini</h2><p>Posisi saat ini, bukan aktivitas periode.</p></div><span class="report-asof">Per ' + escapeHtml(formatTanggalID(new Date())) + '</span></div>' +
       '<div class="grid-summary">' +
         summaryCard('Total Anggota', d0.totalAnggota, d0.anggotaAktif + ' aktif') +
-        summaryCard('Total Simpanan', formatRupiah(d0.totalSimpanan), 'Wajib ' + formatRupiah(d0.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d0.totalSimpananSukarela)) +
+        summaryCard('Total Simpanan', formatRupiah(d0.totalSimpanan), 'Saldo bersih: Wajib ' + formatRupiah(d0.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d0.totalSimpananSukarela)) +
+        summaryCard('Total Penarikan', formatRupiah(d0.totalPenarikanSimpanan || 0), 'Akumulasi penarikan simpanan') +
         summaryCard('Total Infaq', formatRupiah(d0.totalInfaq), 'Terpisah dari simpanan') +
         summaryCard('Total Piutang', formatRupiah(d0.totalPiutang), d0.jumlahPinjamanAktif + ' pinjaman aktif') +
         summaryCard('Pinjaman Dicairkan', formatRupiah(d0.totalPinjamanDicairkan), '') +
@@ -928,7 +1025,7 @@ async function renderLaporanBody(tabKey) {
       ['Indikator', 'Nilai'],
       [
         ['Total Anggota', d0.totalAnggota], ['Anggota Aktif', d0.anggotaAktif],
-        ['Simpanan Wajib', d0.totalSimpananWajib], ['Simpanan Sukarela', d0.totalSimpananSukarela], ['Total Simpanan', d0.totalSimpanan],
+        ['Simpanan Wajib', d0.totalSimpananWajib], ['Simpanan Sukarela', d0.totalSimpananSukarela], ['Total Simpanan', d0.totalSimpanan], ['Total Penarikan Simpanan', d0.totalPenarikanSimpanan || 0],
         ['Total Infaq', d0.totalInfaq], ['Pinjaman Dicairkan', d0.totalPinjamanDicairkan], ['Total Pembayaran', d0.totalPembayaran],
         ['Total Piutang', d0.totalPiutang], ['Pinjaman Aktif', d0.jumlahPinjamanAktif], ['Pinjaman Lunas', d0.jumlahPinjamanLunas]
       ],
@@ -987,30 +1084,69 @@ async function renderLaporanBody(tabKey) {
   }
 
   if (tabKey === 'simpanan') {
-    var savingRes = await apiCall('getSavingRekapPerMember', {});
+    var savingRes = await apiCall('getSavingRekapDetailedPerMember', {});
     if (!savingRes.success) return showLaporanError(savingRes.error);
     var savingRows = savingRes.data;
-    body.innerHTML = '<div class="report-section-head"><div><h2>Rekap Simpanan per Anggota</h2><p>Akumulasi simpanan wajib dan sukarela.</p></div></div>' +
+    body.innerHTML = '<div class="report-section-head"><div><h2>Rekap Simpanan per Anggota</h2><p>Saldo bersih simpanan setelah memperhitungkan setoran dan penarikan.</p></div></div>' +
       reportFilterBar(reportSearchField('Cari nama anggota...')) + '<div id="report-table-result"></div>';
     var renderSavings = function () {
       var q = document.getElementById('report-filter-search').value;
       var filtered = savingRows.filter(function (r) { return containsQuery([r.nama, r.member_id], q); });
       var totalWajib = filtered.reduce(function (s, r) { return s + Number(r.wajib || 0); }, 0);
       var totalSukarela = filtered.reduce(function (s, r) { return s + Number(r.sukarela || 0); }, 0);
+      var totalTarik = filtered.reduce(function (s, r) { return s + Number(r.penarikanWajib || 0) + Number(r.penarikanSukarela || 0); }, 0);
       var rows = filtered.map(function (r) {
-        return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td><td data-label="Wajib" class="col-amount amount">' + escapeHtml(formatRupiah(r.wajib)) + '</td>' +
-          '<td data-label="Sukarela" class="col-amount amount">' + escapeHtml(formatRupiah(r.sukarela)) + '</td><td data-label="Total" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>';
+        return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td>' +
+          '<td data-label="Setoran" class="col-amount amount">' + escapeHtml(formatRupiah(Number(r.setoranWajib || 0) + Number(r.setoranSukarela || 0))) + '</td>' +
+          '<td data-label="Penarikan" class="col-amount amount">' + escapeHtml(formatRupiah(Number(r.penarikanWajib || 0) + Number(r.penarikanSukarela || 0))) + '</td>' +
+          '<td data-label="Saldo Wajib" class="col-amount amount">' + escapeHtml(formatRupiah(r.wajib)) + '</td>' +
+          '<td data-label="Saldo Sukarela" class="col-amount amount">' + escapeHtml(formatRupiah(r.sukarela)) + '</td>' +
+          '<td data-label="Saldo Total" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>';
       }).join('');
       document.getElementById('report-table-result').innerHTML = reportSummaryStrip([
         { label: 'Simpanan Wajib', value: formatRupiah(totalWajib), amount: true },
         { label: 'Simpanan Sukarela', value: formatRupiah(totalSukarela), amount: true },
-        { label: 'Total Simpanan', value: formatRupiah(totalWajib + totalSukarela), amount: true }
-      ]) + laporanTable(['Anggota', 'Wajib', 'Sukarela', 'Total'], rows, filtered.length, ['', 'col-amount', 'col-amount', 'col-amount']);
-      setLaporanExport(['Anggota', 'Simpanan Wajib', 'Simpanan Sukarela', 'Total'], filtered.map(function (r) { return [r.nama, r.wajib, r.sukarela, r.total]; }),
+        { label: 'Total Penarikan', value: formatRupiah(totalTarik), amount: true },
+        { label: 'Saldo Simpanan', value: formatRupiah(totalWajib + totalSukarela), amount: true }
+      ]) + laporanTable(['Anggota', 'Setoran', 'Penarikan', 'Saldo Wajib', 'Saldo Sukarela', 'Saldo Total'], rows, filtered.length, ['', 'col-amount', 'col-amount', 'col-amount', 'col-amount', 'col-amount']);
+      setLaporanExport(['Anggota', 'Setoran Wajib', 'Setoran Sukarela', 'Penarikan Wajib', 'Penarikan Sukarela', 'Saldo Wajib', 'Saldo Sukarela', 'Saldo Total'], filtered.map(function (r) { return [r.nama, r.setoranWajib, r.setoranSukarela, r.penarikanWajib, r.penarikanSukarela, r.wajib, r.sukarela, r.total]; }),
         'rekap-simpanan-arisan-wk.csv', q ? 'Pencarian: ' + q : 'Seluruh anggota');
     };
     bindReportFilter(['report-filter-search'], renderSavings);
     renderSavings();
+    return;
+  }
+
+  if (tabKey === 'penarikan-simpanan') {
+    await ensureMembersLoaded();
+    var withdrawalRes = await apiCall('getSavingWithdrawals', {});
+    if (!withdrawalRes.success) return showLaporanError(withdrawalRes.error);
+    var withdrawalRows = withdrawalRes.data;
+    body.innerHTML = '<div class="report-section-head"><div><h2>Laporan Penarikan Simpanan</h2><p>Riwayat pengambilan simpanan wajib/sukarela dengan petugas dan keterangan.</p></div></div>' +
+      reportFilterBar(reportSearchField('Cari anggota, ID penarikan, keterangan...') + reportSelectField('report-filter-status', 'Jenis', [
+        { value: '', label: 'Semua jenis' }, { value: 'WAJIB', label: 'Wajib' }, { value: 'SUKARELA', label: 'Sukarela' }
+      ])) + '<div id="report-table-result"></div>';
+    var renderWithdrawals = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var jenis = document.getElementById('report-filter-status').value;
+      var filtered = withdrawalRows.filter(function (r) {
+        return (!jenis || r.jenis === jenis) && containsQuery([r.withdrawal_id, r.member_id, memberNameById(r.member_id), r.tanggal, r.keterangan, r.petugas], q);
+      });
+      var total = filtered.reduce(function (sum, r) { return sum + Number(r.nominal || 0); }, 0);
+      var rows = filtered.slice().reverse().map(function (r) {
+        return '<tr><td data-label="Tanggal">' + escapeHtml(r.tanggal) + '</td><td data-label="ID">' + escapeHtml(r.withdrawal_id) + '</td>' +
+          '<td data-label="Anggota">' + escapeHtml(memberNameById(r.member_id)) + '</td><td data-label="Jenis">' + escapeHtml(r.jenis) + '</td>' +
+          '<td data-label="Nominal" class="col-amount amount">' + escapeHtml(formatRupiah(r.nominal)) + '</td><td data-label="Keterangan">' + escapeHtml(r.keterangan || '-') + '</td></tr>';
+      }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([
+        { label: 'Total Penarikan', value: formatRupiah(total), amount: true }, { label: 'Transaksi', value: filtered.length + ' transaksi' }
+      ]) + laporanTable(['Tanggal', 'ID', 'Anggota', 'Jenis', 'Nominal', 'Keterangan'], rows, filtered.length, ['', '', '', '', 'col-amount', '']);
+      setLaporanExport(['Tanggal', 'ID Penarikan', 'Anggota', 'Jenis', 'Nominal', 'Metode', 'Petugas', 'Keterangan'], filtered.map(function (r) {
+        return [r.tanggal, r.withdrawal_id, memberNameById(r.member_id), r.jenis, r.nominal, r.metode || '', r.petugas || '', r.keterangan || ''];
+      }), 'laporan-penarikan-simpanan-arisan-wk.csv', 'Jenis: ' + (jenis || 'Semua') + (q ? ' • Pencarian: ' + q : ''));
+    };
+    bindReportFilter(['report-filter-search', 'report-filter-status'], renderWithdrawals);
+    renderWithdrawals();
     return;
   }
 
@@ -1127,6 +1263,7 @@ async function loadPeriodeReport() {
     '<div class="grid-summary">' +
       summaryCard('Simpanan Wajib', formatRupiah(d.simpananWajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(d.simpananSukarela), '') +
+      summaryCard('Penarikan Simpanan', formatRupiah(d.penarikanSimpanan || 0), '') +
       summaryCard('Infaq', formatRupiah(d.infaq), '') +
       summaryCard('Pinjaman Dicairkan', formatRupiah(d.pinjamanDicairkan), '') +
       summaryCard('Pembayaran', formatRupiah(d.pembayaran), '') +
@@ -1134,7 +1271,7 @@ async function loadPeriodeReport() {
     '</div>';
   var periodeLabel = 'Periode: ' + formatTanggalID(start) + ' s/d ' + formatTanggalID(end);
   setLaporanExport(['Indikator', 'Nilai'], [
-    ['Simpanan Wajib', d.simpananWajib], ['Simpanan Sukarela', d.simpananSukarela], ['Infaq', d.infaq],
+    ['Simpanan Wajib', d.simpananWajib], ['Simpanan Sukarela', d.simpananSukarela], ['Penarikan Simpanan', d.penarikanSimpanan || 0], ['Infaq', d.infaq],
     ['Pinjaman Dicairkan', d.pinjamanDicairkan], ['Pembayaran', d.pembayaran], ['Jumlah Transaksi', d.jumlahTransaksi]
   ], 'rekap-periode-' + start + '-sd-' + end + '.csv', periodeLabel);
 }
@@ -1325,7 +1462,8 @@ async function renderDataSaya() {
       summaryCard('Total Dibayar', formatRupiah(m.loans.totalPembayaran), '') +
       summaryCard('Sisa Pinjaman', formatRupiah(m.loans.sisa), '') +
     '</div>' +
-    '<h2>Riwayat Simpanan Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.savings }, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) : '') +
+    '<h2>Riwayat Setoran Simpanan Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.savings }, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) : '') +
+    '<h2 style="margin-top:var(--space-6);">Riwayat Penarikan Simpanan Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.withdrawals || [] }, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) : '') +
     '<h2 style="margin-top:var(--space-6);">Riwayat Infaq Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.infaq }, ['tanggal', 'nominal'], ['Tanggal', 'Nominal']) : '') +
     '<h2 style="margin-top:var(--space-6);">Pinjaman Saya</h2>' + (hist ? renderLoanMiniTable({ success: true, data: hist.loans }) : '') +
     '<h2 style="margin-top:var(--space-6);">Riwayat Pembayaran Saya</h2>' + (hist ? renderMiniTable({ success: true, data: hist.payments }, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']) : '');
