@@ -102,5 +102,17 @@
   <script src="icons.js"></script>
   <script src="views.js"></script>
   <script src="app.js"></script>
+  <script>
+    // Daftarkan Service Worker (sw.js) -- SATU-SATUNYA tujuannya supaya
+    // Chrome mengizinkan "Install" sungguhan (jendela mandiri tanpa address
+    // bar), bukan untuk fitur offline. Dibungkus try/catch supaya browser
+    // lama yang tidak mendukung service worker tetap bisa memakai aplikasi
+    // seperti biasa (fitur ini murni tambahan, bukan syarat aplikasi jalan).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>
