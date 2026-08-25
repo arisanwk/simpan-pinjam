@@ -283,10 +283,8 @@ var currentDetailMemberId = null;
 async function renderAnggotaDetail(memberId) {
   setPageTitle('Detail Anggota');
   showLoading();
-  // PERFORMA: 5 panggilan ini SALING BEBAS (tidak butuh hasil satu sama
-  // lain) tapi sebelumnya dijalankan satu-satu (await berurutan) --
-  // artinya total waktu tunggu = jumlah SEMUA latensi request, bukan cuma
-  // yang paling lambat. Promise.all menjalankannya bersamaan.
+  // PERFORMA: request detail dijalankan paralel agar waktu tunggu mengikuti
+  // request paling lambat, bukan akumulasi seluruh request.
   var results = await Promise.all([
     apiCall('getMember', { memberId: memberId }),
     apiCall('getSavings', { filter: { member_id: memberId } }),
@@ -301,31 +299,126 @@ async function renderAnggotaDetail(memberId) {
   var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
 
   contentArea().innerHTML =
-    '<button class="btn btn-ghost text-small" id="btn-back-anggota" style="margin-bottom:var(--space-4);">' + icon('arrowLeft', 'icon-sm') + 'Kembali ke Daftar Anggota</button>' +
-    '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
-      '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
-      ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div>' +
-      (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">' + icon('edit', 'icon-sm') + 'Edit</button>' : '') +
-    '</div>' +
-    '<div class="grid-summary mb-6">' +
-      summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
-      summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
-      summaryCard('Total Simpanan', formatRupiah(m.savings.total), '') +
-      summaryCard('Total Infaq', formatRupiah(m.infaqTotal), '') +
-      summaryCard('Total Pinjaman', formatRupiah(m.loans.totalPinjaman), '') +
-      summaryCard('Total Dibayar', formatRupiah(m.loans.totalPembayaran), '') +
-      summaryCard('Sisa Pinjaman', formatRupiah(m.loans.sisa), '') +
-    '</div>' +
-    '<h2>Riwayat Simpanan</h2>' + renderMiniTable(savingsRes, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) +
-    '<h2 style="margin-top:var(--space-6);">Riwayat Infaq</h2>' + renderMiniTable(infaqRes, ['tanggal', 'nominal'], ['Tanggal', 'Nominal']) +
-    '<h2 style="margin-top:var(--space-6);">Pinjaman</h2>' + renderLoanMiniTable(loansRes) +
-    '<h2 style="margin-top:var(--space-6);">Riwayat Pembayaran</h2>' + renderMiniTable(paymentsRes, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']);
+    '<div class="member-detail-page">' +
+      '<button class="btn btn-ghost text-small no-print" id="btn-back-anggota" style="margin-bottom:var(--space-4);">' + icon('arrowLeft', 'icon-sm') + 'Kembali ke Daftar Anggota</button>' +
+      '<div class="content-header member-detail-header"><div><div class="eyebrow">DETAIL ANGGOTA</div><h1 style="margin:2px 0 0;">' + escapeHtml(m.nama) + '</h1>' +
+        '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
+        ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div>' +
+        '<div class="member-detail-actions no-print">' +
+          '<button class="btn btn-secondary text-small" id="btn-print-anggota">' + icon('printer', 'icon-sm') + 'Cetak / PDF</button>' +
+          '<button class="btn btn-whatsapp text-small" id="btn-wa-anggota">' + icon('messageCircle', 'icon-sm') + 'Kirim WhatsApp</button>' +
+          (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">' + icon('edit', 'icon-sm') + 'Edit</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<section class="member-profile-card">' +
+        '<div class="member-profile-title"><strong>Profil Anggota</strong><span>Data identitas & kontak</span></div>' +
+        '<div class="member-profile-grid">' +
+          memberProfileItem('Nomor Anggota', m.nomor_anggota || m.member_id || '-') +
+          memberProfileItem('NIK / NIP', m.nik_nip || '-') +
+          memberProfileItem('Jenis Kelamin', m.jenis_kelamin || '-') +
+          memberProfileItem('Unit', m.unit || '-') +
+          memberProfileItem('Jabatan', m.jabatan || '-') +
+          memberProfileItem('No. WhatsApp / HP', m.no_hp || '-') +
+          memberProfileItem('Email', m.email || '-') +
+          memberProfileItem('Status', st.label) +
+        '</div>' +
+      '</section>' +
+      '<div class="grid-summary mb-6 member-finance-summary">' +
+        summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
+        summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
+        summaryCard('Total Simpanan', formatRupiah(m.savings.total), '') +
+        summaryCard('Total Infaq', formatRupiah(m.infaqTotal), '') +
+        summaryCard('Total Pinjaman', formatRupiah(m.loans.totalPinjaman), '') +
+        summaryCard('Total Dibayar', formatRupiah(m.loans.totalPembayaran), '') +
+        summaryCard('Sisa Pinjaman', formatRupiah(m.loans.sisa), '') +
+      '</div>' +
+      '<section class="member-history-section"><h2>Riwayat Simpanan</h2>' + renderMiniTable(savingsRes, ['tanggal', 'jenis', 'nominal'], ['Tanggal', 'Jenis', 'Nominal']) + '</section>' +
+      '<section class="member-history-section"><h2>Riwayat Infaq</h2>' + renderMiniTable(infaqRes, ['tanggal', 'nominal'], ['Tanggal', 'Nominal']) + '</section>' +
+      '<section class="member-history-section"><h2>Pinjaman</h2>' + renderLoanMiniTable(loansRes) + '</section>' +
+      '<section class="member-history-section"><h2>Riwayat Pembayaran</h2>' + renderMiniTable(paymentsRes, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']) + '</section>' +
+    '</div>';
 
   document.getElementById('btn-back-anggota').addEventListener('click', renderAnggotaList);
+  document.getElementById('btn-print-anggota').addEventListener('click', function () { printAnggotaDetail(m); });
+  document.getElementById('btn-wa-anggota').addEventListener('click', function () { shareAnggotaViaWhatsApp(m); });
   var editBtn = document.getElementById('btn-edit-anggota-detail');
   if (editBtn) editBtn.addEventListener('click', function () {
     openEditAnggotaForm(m, function () { renderAnggotaDetail(memberId); });
   });
+}
+
+function memberProfileItem(label, value) {
+  return '<div class="member-profile-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>';
+}
+
+/** Menyiapkan header cetak khusus detail anggota lalu membuka dialog Print / Save as PDF. */
+function printAnggotaDetail(member) {
+  var titleEl = document.getElementById('print-report-title');
+  var metaEl = document.getElementById('print-report-meta');
+  var footerEl = document.getElementById('print-footer-text');
+  if (titleEl) titleEl.textContent = 'Detail Anggota — ' + (member.nama || member.member_id || '');
+  if (metaEl) metaEl.textContent = 'Nomor Anggota: ' + (member.nomor_anggota || member.member_id || '-') +
+    ' • Unit: ' + (member.unit || '-') + ' • Dicetak: ' + formatTanggalID(new Date());
+  if (footerEl) footerEl.textContent = 'ARISAN WK — Wanita Keadilan • Dokumen ringkasan anggota';
+
+  // Judul dokumen membantu browser memberi nama file PDF yang lebih informatif.
+  var oldTitle = document.title;
+  var safeName = String(member.nama || member.member_id || 'Anggota').replace(/[^a-zA-Z0-9À-ÿ _-]/g, '').replace(/\s+/g, '-');
+  document.title = 'ARISAN-WK-Detail-Anggota-' + safeName;
+  var restore = function () { document.title = oldTitle; };
+  window.addEventListener('afterprint', restore, { once: true });
+  window.print();
+  // Fallback untuk browser yang tidak mengirim event afterprint secara konsisten.
+  setTimeout(function () { if (document.title !== oldTitle) document.title = oldTitle; }, 1500);
+}
+
+function normalizeWhatsAppNumber(raw) {
+  var digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.indexOf('0') === 0) digits = '62' + digits.slice(1);
+  else if (digits.indexOf('8') === 0) digits = '62' + digits;
+  return digits;
+}
+
+/**
+ * Membuka WhatsApp ke nomor anggota dengan ringkasan finansial yang sudah
+ * diisi. Browser/WhatsApp tidak mengizinkan situs web melampirkan file PDF
+ * lokal secara otomatis; PDF dapat disimpan lewat tombol Cetak/PDF lalu
+ * dilampirkan pengguna di percakapan yang sama.
+ */
+function shareAnggotaViaWhatsApp(member) {
+  var phone = normalizeWhatsAppNumber(member.no_hp);
+  if (!phone || phone.length < 9) {
+    showToast('Nomor WhatsApp/HP anggota belum tersedia atau tidak valid.', 'danger');
+    return;
+  }
+  var lines = [
+    '*ARISAN WK — Wanita Keadilan*',
+    '*Ringkasan Anggota*',
+    '',
+    'Nama: ' + (member.nama || '-'),
+    'No. Anggota: ' + (member.nomor_anggota || member.member_id || '-'),
+    'Unit: ' + (member.unit || '-'),
+    'Status: ' + (member.status || '-'),
+    '',
+    '*Simpanan*',
+    'Wajib: ' + formatRupiah(member.savings && member.savings.wajib),
+    'Sukarela: ' + formatRupiah(member.savings && member.savings.sukarela),
+    'Total: ' + formatRupiah(member.savings && member.savings.total),
+    '',
+    '*Infaq*',
+    'Total: ' + formatRupiah(member.infaqTotal),
+    '',
+    '*Pinjaman*',
+    'Total Pinjaman: ' + formatRupiah(member.loans && member.loans.totalPinjaman),
+    'Total Dibayar: ' + formatRupiah(member.loans && member.loans.totalPembayaran),
+    'Sisa Pinjaman: ' + formatRupiah(member.loans && member.loans.sisa),
+    '',
+    'Data per ' + formatTanggalID(new Date()) + '.',
+    'Silakan hubungi pengelola ARISAN WK apabila ada data yang perlu dikonfirmasi.'
+  ];
+  var url = 'https://wa.me/' + encodeURIComponent(phone) + '?text=' + encodeURIComponent(lines.join('\n'));
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 function renderMiniTable(res, fields, labels) {

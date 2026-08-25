@@ -19,7 +19,13 @@
   <!-- Header & footer khusus cetak — hanya tampil saat Print/Save as PDF
        (lihat aturan @media print di styles.css). Diisi JS sebelum window.print(). -->
   <div id="print-header">
-    <div class="app-name">ARISAN WK — Wanita Keadilan</div>
+    <div class="print-brand-row">
+      <img src="assets/pks.png" alt="Logo PKS" class="print-logo">
+      <div>
+        <div class="app-name">ARISAN WK</div>
+        <div class="print-brand-subtitle">Wanita Keadilan</div>
+      </div>
+    </div>
     <div class="report-title" id="print-report-title"></div>
     <div class="meta" id="print-report-meta"></div>
   </div>

@@ -366,7 +366,10 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
     display: block; margin-bottom: var(--space-5); padding-bottom: var(--space-3);
     border-bottom: 2px solid var(--color-ink);
   }
-  #print-header .app-name { font-weight: 700; font-size: var(--fs-h2); }
+  #print-header .print-brand-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  #print-header .print-logo { width:48px; height:48px; object-fit:contain; }
+  #print-header .app-name { font-weight: 700; font-size: var(--fs-h2); line-height:1.05; }
+  #print-header .print-brand-subtitle { font-size:11px; font-weight:600; margin-top:3px; color:var(--color-muted); }
   #print-header .report-title { font-weight: 700; font-size: var(--fs-h3); margin-top: 4px; }
   #print-header .meta { color: var(--color-muted); font-size: var(--fs-small); margin-top: 4px; }
   #print-footer {
@@ -521,4 +524,64 @@ table.data-table td.col-amount, table.data-table th.col-amount { text-align: rig
   .report-metric { box-shadow:none; padding:8px; }
   .report-metric strong { font-size:12px; }
   .report-section-head { margin:0 0 12px; }
+}
+
+
+/* ============================================================
+   Detail Anggota — profil, cetak/PDF, WhatsApp
+   ============================================================ */
+.member-detail-header { align-items:flex-start; gap:var(--space-4); }
+.member-detail-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.btn-whatsapp {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  background:#168b5b; color:#fff; border:1px solid #168b5b;
+}
+.btn-whatsapp:hover { background:#11744b; border-color:#11744b; }
+.member-profile-card {
+  background:var(--color-card); border:1px solid var(--color-border); border-radius:16px;
+  padding:18px 20px; margin-bottom:var(--space-5); box-shadow:var(--shadow-sm);
+}
+.member-profile-title { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.member-profile-title strong { font-size:16px; }
+.member-profile-title span { color:var(--color-muted); font-size:var(--fs-small); }
+.member-profile-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 18px; }
+.member-profile-item { min-width:0; }
+.member-profile-item span { display:block; color:var(--color-muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.member-profile-item strong { display:block; font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
+.member-history-section { margin-top:var(--space-6); }
+.member-history-section > h2 { margin-bottom:10px; }
+
+@media (max-width: 980px) {
+  .member-profile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 720px) {
+  .member-detail-header { display:block; }
+  .member-detail-actions { justify-content:flex-start; margin-top:14px; }
+  .member-detail-actions .btn { flex:1 1 auto; }
+  .member-profile-card { padding:16px; }
+  .member-profile-grid { grid-template-columns:1fr; gap:11px; }
+  .member-profile-title { display:block; }
+  .member-profile-title span { display:block; margin-top:3px; }
+}
+
+@media print {
+  @page { margin: 12mm; }
+  .member-detail-page .content-header { margin-bottom:12px; }
+  .member-detail-page .eyebrow { display:none; }
+  .member-detail-page h1 { font-size:20px !important; }
+  .member-profile-card { box-shadow:none; border-radius:0; padding:10px 0 12px; margin-bottom:12px; border-left:0; border-right:0; }
+  .member-profile-title { margin-bottom:8px; }
+  .member-profile-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px 14px; }
+  .member-profile-item span { font-size:8px; }
+  .member-profile-item strong { font-size:10px; }
+  .member-finance-summary { grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:6px !important; margin-bottom:14px !important; }
+  .member-finance-summary .summary-card { box-shadow:none; padding:8px !important; break-inside:avoid; }
+  .member-finance-summary .summary-card .value { font-size:12px !important; }
+  .member-finance-summary .summary-card .label { font-size:8px !important; }
+  .member-history-section { margin-top:14px; break-inside:auto; }
+  .member-history-section > h2 { font-size:13px; margin:0 0 6px; break-after:avoid; }
+  .member-detail-page .table-wrap { box-shadow:none; border:1px solid var(--color-border); break-inside:auto; }
+  .member-detail-page table.data-table { font-size:9px; }
+  .member-detail-page table.data-table th, .member-detail-page table.data-table td { padding:5px 7px; }
+  .member-detail-page table.data-table tr { break-inside:avoid; }
 }
