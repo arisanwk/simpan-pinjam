@@ -326,8 +326,10 @@ function renderLoanMiniTable(res) {
   if (!res.success) return '<div class="alert alert-danger">' + escapeHtml(res.error.message) + '</div>';
   if (res.data.length === 0) return '<div class="empty-state">Belum pernah mengajukan pinjaman.</div>';
   var rows = res.data.map(function (l) {
+    var nilaiTampil = l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan;
+    var labelNilai = l.isDisbursed ? '' : ' <span class="text-small text-muted">(pengajuan)</span>';
     return '<tr><td data-label="No Pinjaman">' + escapeHtml(l.loan_id) + '</td>' +
-      '<td data-label="Nilai" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPinjaman)) + '</td>' +
+      '<td data-label="Nilai" class="col-amount amount">' + escapeHtml(formatRupiah(nilaiTampil)) + labelNilai + '</td>' +
       '<td data-label="Sisa" class="col-amount amount">' + escapeHtml(formatRupiah(l.sisa)) + '</td>' +
       '<td data-label="Status"><span class="badge ' + loanStatusBadgeClass(l.statusView) + '">' + escapeHtml(l.statusView) + '</span></td></tr>';
   }).join('');
@@ -488,11 +490,17 @@ async function renderPinjamanList(openFormDirectly) {
       actions = '<button class="btn btn-secondary text-small" data-action="approve" data-loan="' + l.loan_id + '">Setujui</button> ' +
                 '<button class="btn btn-danger text-small" data-action="reject" data-loan="' + l.loan_id + '">Tolak</button>';
     } else if (isAdmin && l.status === 'DISETUJUI') {
-      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.totalPinjaman + '">Cairkan</button>';
+      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.nominalPengajuan + '">Cairkan</button>';
     }
+    // Sebelum dicairkan, "Total Pinjaman" MEMANG Rp0 (belum ada uang yang
+    // benar-benar keluar, lihat CalculationService.calcLoanCore_) -- supaya
+    // tidak terlihat seperti error, tampilkan nominal PENGAJUAN sebagai
+    // gantinya untuk status yang belum dicairkan.
+    var nilaiTampil = l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan;
+    var labelNilai = l.isDisbursed ? '' : ' <span class="text-small text-muted">(pengajuan)</span>';
     return '<tr><td data-label="No Pinjaman">' + escapeHtml(l.loan_id) + '</td>' +
       '<td data-label="Anggota">' + escapeHtml(memberNameById(l.member_id)) + '</td>' +
-      '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPinjaman)) + '</td>' +
+      '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(nilaiTampil)) + labelNilai + '</td>' +
       '<td data-label="Sisa" class="col-amount amount">' + escapeHtml(formatRupiah(l.sisa)) + '</td>' +
       '<td data-label="Status"><span class="badge ' + loanStatusBadgeClass(l.statusView) + '">' + escapeHtml(l.statusView) + '</span></td>' +
       '<td data-label="Aksi">' + actions + '</td></tr>';
@@ -507,14 +515,17 @@ async function renderPinjamanList(openFormDirectly) {
 
   var btnAdd = document.getElementById('btn-add-pinjaman');
   if (btnAdd) btnAdd.addEventListener('click', openPinjamanForm);
-  contentArea().querySelectorAll('[data-action]').forEach(function (btn) {
-    btn.addEventListener('click', function () { handleLoanAction(btn.dataset.action, btn.dataset.loan, btn.dataset.nominal); });
+  contentArea().querySelectorAll('[data-action="approve"],[data-action="reject"]').forEach(function (btn) {
+    btn.addEventListener('click', function () { handleLoanAction(btn.dataset.action, btn.dataset.loan); });
+  });
+  contentArea().querySelectorAll('[data-action="disburse"]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openDisburseForm(btn.dataset.loan, Number(btn.dataset.nominal)); });
   });
 
   if (openFormDirectly && canApply) openPinjamanForm();
 }
 
-async function handleLoanAction(action, loanId, nominal) {
+async function handleLoanAction(action, loanId, reason) {
   if (action === 'approve') {
     if (!confirm('Setujui pinjaman ' + loanId + '?')) return;
     var res = await apiCall('approveLoan', { loanId: loanId });
@@ -522,19 +533,41 @@ async function handleLoanAction(action, loanId, nominal) {
     showToast('Pinjaman disetujui.', 'success');
     renderPinjamanList();
   } else if (action === 'reject') {
-    var reason = prompt('Alasan penolakan (wajib diisi):');
-    if (!reason) return;
-    var res2 = await apiCall('rejectLoan', { loanId: loanId, reason: reason });
+    var alasan = prompt('Alasan penolakan (wajib diisi):');
+    if (!alasan) return;
+    var res2 = await apiCall('rejectLoan', { loanId: loanId, reason: alasan });
     if (!res2.success) return showToast(res2.error.message, 'danger');
     showToast('Pinjaman ditolak.', 'success');
     renderPinjamanList();
-  } else if (action === 'disburse') {
-    if (!confirm('Cairkan pinjaman ' + loanId + ' sebesar ' + formatRupiah(nominal) + '?')) return;
-    var res3 = await apiCall('disburseLoan', { loanId: loanId, nominalPencairan: Number(nominal) });
-    if (!res3.success) return showToast(res3.error.message, 'danger');
-    showToast('Pinjaman dicairkan.', 'success');
-    renderPinjamanList();
   }
+}
+
+/**
+ * Form pencairan -- BUKAN lagi window.confirm() dengan angka tersembunyi
+ * di atribut HTML (itu penyebab bug "Cairkan selalu gagal": nominal yang
+ * dikirim ternyata Total Pinjaman yang MEMANG masih Rp0 sebelum dicairkan,
+ * bukan nominal yang diajukan/disetujui). Sekarang ADMIN benar-benar
+ * MELIHAT dan bisa MENGUBAH nominal pencairan sebelum submit -- pra-diisi
+ * dari nominal pengajuan, tapi tidak wajib sama persis (mis. disetujui
+ * sebagian).
+ */
+function openDisburseForm(loanId, nominalPengajuan) {
+  openModal('Cairkan Pinjaman — ' + escapeHtml(loanId),
+    '<p class="text-muted">Nominal pengajuan: <strong class="amount">' + escapeHtml(formatRupiah(nominalPengajuan)) + '</strong></p>' +
+    field('Nominal Pencairan (Rp)', 'nominal_pencairan', true, 'number'),
+    async function (formData) {
+      var nominal = Number(formData.get('nominal_pencairan'));
+      setModalSubmitting(true, 'Cairkan');
+      var res = await apiCall('disburseLoan', { loanId: loanId, nominalPencairan: nominal });
+      setModalSubmitting(false);
+      if (!res.success) { showToast(res.error.message, 'danger'); return; }
+      closeModal();
+      showToast('Pinjaman dicairkan: ' + formatRupiah(nominal), 'success');
+      renderPinjamanList();
+    });
+  var form = document.getElementById('dynamic-modal-form');
+  var input = form.querySelector('[name="nominal_pencairan"]');
+  if (input) input.value = nominalPengajuan || '';
 }
 
 function openPinjamanForm() {
@@ -740,9 +773,11 @@ async function renderLaporanBody(tabKey) {
     var res = await apiCall(action, payload);
     if (!res.success) return showLaporanError(res.error);
     var rows = res.data.map(function (l) {
+      var nilaiTampil = l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan;
+      var labelNilai = l.isDisbursed ? '' : ' <span class="text-small text-muted">(pengajuan)</span>';
       return '<tr><td data-label="No Pinjaman">' + escapeHtml(l.loan_id) + '</td>' +
         '<td data-label="Anggota">' + escapeHtml(memberNameById(l.member_id)) + '</td>' +
-        '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPinjaman)) + '</td>' +
+        '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(nilaiTampil)) + labelNilai + '</td>' +
         '<td data-label="Dibayar" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPembayaran)) + '</td>' +
         '<td data-label="Sisa" class="col-amount amount">' + escapeHtml(formatRupiah(l.sisa)) + '</td>' +
         '<td data-label="Status"><span class="badge ' + loanStatusBadgeClass(l.statusView) + '">' + escapeHtml(l.statusView) + '</span></td></tr>';
