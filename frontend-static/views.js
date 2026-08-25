@@ -138,6 +138,7 @@ async function renderDashboard() {
       summaryCard('Total Penarikan', formatRupiah(d.totalPenarikanSimpanan || 0), 'Akumulasi penarikan simpanan') +
       summaryCard('Total Infaq', formatRupiah(d.totalInfaq), 'Terpisah dari simpanan') +
       summaryCard('Total Piutang', formatRupiah(d.totalPiutang), d.jumlahPinjamanAktif + ' pinjaman aktif') +
+      summaryCard('Kas Tersedia', formatRupiah(d.kasTersedia || 0), 'Wajib + Sukarela + Infaq − piutang aktif') +
       summaryCard('Pinjaman Dicairkan', formatRupiah(d.totalPinjamanDicairkan), '') +
       summaryCard('Total Pembayaran', formatRupiah(d.totalPembayaran), '') +
       summaryCard('Pinjaman Aktif', d.jumlahPinjamanAktif, '') +
@@ -836,17 +837,40 @@ function openDisburseForm(loanId, nominalPengajuan) {
   if (input) input.value = formatRupiahInput(nominalPengajuan || '');
 }
 
-function openPinjamanForm() {
+async function openPinjamanForm() {
+  await ensureMembersLoaded();
+
+  // Ambil posisi kas terbaru setiap kali form dibuka. Nilai ini hanya untuk
+  // UX/pre-check; backend tetap memvalidasi ulang saat pengajuan disimpan.
+  var cashRes = await apiCall('getDashboardSummary', {});
+  if (!cashRes.success) { showToast(cashRes.error.message, 'danger'); return; }
+  var kasTersedia = Number(cashRes.data.kasTersedia || 0);
+
   var memberOptions = membersCache.filter(function (m) { return m.status === 'AKTIF'; })
     .map(function (m) { return { value: m.member_id, label: m.nama + ' (' + m.nomor_anggota + ')' }; });
+
   openModal('Pengajuan Pinjaman',
+    '<div class="cash-availability-box" id="loan-cash-box">' +
+      '<span>Kas tersedia saat ini</span>' +
+      '<strong class="amount">' + escapeHtml(formatRupiah(kasTersedia)) + '</strong>' +
+      '<small>Dana yang dapat digunakan untuk pinjaman: Simpanan Wajib + Sukarela + Infaq, dikurangi piutang aktif.</small>' +
+    '</div>' +
+    '<div class="alert alert-warning" id="loan-cash-warning" style="display:none;">Sisa uang kas tidak cukup</div>' +
     selectField('Anggota', 'member_id', memberOptions, true) +
     field('Nominal Pengajuan (Rp)', 'nominal_pengajuan', true, 'number') +
     field('Tujuan', 'tujuan', false),
     async function (formData) {
+      var nominal = parseRupiahInput(formData.get('nominal_pengajuan'));
+      if (nominal > kasTersedia) {
+        showToast('Sisa uang kas tidak cukup', 'danger');
+        var warning = document.getElementById('loan-cash-warning');
+        if (warning) warning.style.display = '';
+        return;
+      }
+
       setModalSubmitting(true, 'Ajukan');
       var res = await apiCall('createLoanApplication', {
-        member_id: formData.get('member_id'), nominal_pengajuan: parseRupiahInput(formData.get('nominal_pengajuan')),
+        member_id: formData.get('member_id'), nominal_pengajuan: nominal,
         tujuan: formData.get('tujuan'), clientRequestId: cryptoRandomId()
       });
       setModalSubmitting(false);
@@ -855,6 +879,17 @@ function openPinjamanForm() {
       showToast('Pinjaman diajukan: ' + res.data.loan_id + ' (status DIAJUKAN)', 'success');
       renderPinjamanList();
     });
+
+  var nominalInput = document.querySelector('#modal-container input[name="nominal_pengajuan"], .modal input[name="nominal_pengajuan"]');
+  var warningEl = document.getElementById('loan-cash-warning');
+  if (nominalInput) {
+    nominalInput.addEventListener('input', function () {
+      var value = parseRupiahInput(nominalInput.value);
+      var over = value > kasTersedia;
+      if (warningEl) warningEl.style.display = over ? '' : 'none';
+      nominalInput.setCustomValidity(over ? 'Sisa uang kas tidak cukup' : '');
+    });
+  }
 }
 
 /* ============================================================ PEMBAYARAN */
@@ -1076,6 +1111,7 @@ async function renderLaporanBody(tabKey) {
         summaryCard('Total Penarikan', formatRupiah(d0.totalPenarikanSimpanan || 0), 'Akumulasi penarikan simpanan') +
         summaryCard('Total Infaq', formatRupiah(d0.totalInfaq), 'Terpisah dari simpanan') +
         summaryCard('Total Piutang', formatRupiah(d0.totalPiutang), d0.jumlahPinjamanAktif + ' pinjaman aktif') +
+        summaryCard('Kas Tersedia', formatRupiah(d0.kasTersedia || 0), 'Wajib + Sukarela + Infaq − piutang aktif') +
         summaryCard('Pinjaman Dicairkan', formatRupiah(d0.totalPinjamanDicairkan), '') +
         summaryCard('Total Pembayaran', formatRupiah(d0.totalPembayaran), '') +
         summaryCard('Pinjaman Aktif', d0.jumlahPinjamanAktif, '') +
@@ -1087,7 +1123,7 @@ async function renderLaporanBody(tabKey) {
         ['Total Anggota', d0.totalAnggota], ['Anggota Aktif', d0.anggotaAktif],
         ['Simpanan Wajib', d0.totalSimpananWajib], ['Simpanan Sukarela', d0.totalSimpananSukarela], ['Total Simpanan', d0.totalSimpanan], ['Total Penarikan Simpanan', d0.totalPenarikanSimpanan || 0],
         ['Total Infaq', d0.totalInfaq], ['Pinjaman Dicairkan', d0.totalPinjamanDicairkan], ['Total Pembayaran', d0.totalPembayaran],
-        ['Total Piutang', d0.totalPiutang], ['Pinjaman Aktif', d0.jumlahPinjamanAktif], ['Pinjaman Lunas', d0.jumlahPinjamanLunas]
+        ['Total Piutang', d0.totalPiutang], ['Kas Tersedia', d0.kasTersedia || 0], ['Pinjaman Aktif', d0.jumlahPinjamanAktif], ['Pinjaman Lunas', d0.jumlahPinjamanLunas]
       ],
       'ringkasan-keuangan-arisan-wk.csv', 'Kondisi terkini per ' + formatTanggalID(new Date())
     );
