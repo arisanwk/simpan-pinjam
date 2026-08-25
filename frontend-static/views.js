@@ -160,11 +160,17 @@ async function renderAnggotaList() {
 
   var rows = res.data.map(function (m) {
     var st = getSimpleStatusView(m.status);
+    var aksi = canEdit
+      ? '<button class="btn btn-secondary text-small" data-action="edit-member" data-member="' + escapeHtml(m.member_id) + '">Edit</button> ' +
+        '<button class="btn ' + (m.status === 'AKTIF' ? 'btn-danger' : 'btn-secondary') + ' text-small" data-action="toggle-member" data-member="' + escapeHtml(m.member_id) + '" data-status="' + escapeHtml(m.status) + '">' +
+        (m.status === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button>'
+      : '';
     return '<tr class="row-clickable" data-member-id="' + escapeHtml(m.member_id) + '" style="cursor:pointer;">' +
       '<td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td>' +
       '<td data-label="Nama">' + escapeHtml(m.nama) + '</td>' +
       '<td data-label="No HP">' + escapeHtml(m.no_hp) + '</td>' +
       '<td data-label="Status"><span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></td>' +
+      (canEdit ? '<td data-label="Aksi">' + aksi + '</td>' : '') +
       '</tr>';
   }).join('');
 
@@ -174,7 +180,7 @@ async function renderAnggotaList() {
     '</div>' +
     (res.data.length === 0
       ? '<div class="empty-state">Belum ada anggota.' + (canEdit ? '<br><button class="btn btn-secondary" id="btn-add-anggota-empty">+ Tambah Anggota</button>' : '') + '</div>'
-      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nomor</th><th>Nama</th><th>No HP</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
+      : '<div class="table-wrap"><table class="data-table"><thead><tr><th>Nomor</th><th>Nama</th><th>No HP</th><th>Status</th>' + (canEdit ? '<th>Aksi</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table></div>');
 
   ['btn-add-anggota', 'btn-add-anggota-empty'].forEach(function (id) {
     var btn = document.getElementById(id);
@@ -185,6 +191,71 @@ async function renderAnggotaList() {
       currentDetailMemberId = tr.dataset.memberId;
       renderAnggotaDetail(currentDetailMemberId);
     });
+  });
+  // stopPropagation() -- tombol Edit/Nonaktifkan ada DI DALAM baris yang
+  // juga bisa diklik untuk buka detail; tanpa ini, klik tombol akan ikut
+  // memicu buka halaman detail juga.
+  contentArea().querySelectorAll('[data-action="edit-member"]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var member = membersCache.filter(function (m) { return m.member_id === btn.dataset.member; })[0];
+      if (member) openEditAnggotaForm(member);
+    });
+  });
+  contentArea().querySelectorAll('[data-action="toggle-member"]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      handleToggleMemberStatus(btn.dataset.member, btn.dataset.status);
+    });
+  });
+}
+
+async function handleToggleMemberStatus(memberId, currentStatus) {
+  var willActivate = currentStatus !== 'AKTIF';
+  var confirmText = willActivate
+    ? 'Aktifkan kembali anggota ini?'
+    : 'Nonaktifkan anggota ini? Riwayat transaksinya tetap tersimpan -- ini BUKAN hapus permanen.';
+  if (!confirm(confirmText)) return;
+  var res = await apiCall(willActivate ? 'activateMember' : 'deactivateMember', { memberId: memberId });
+  if (!res.success) return showToast(res.error.message, 'danger');
+  showToast(willActivate ? 'Anggota diaktifkan kembali.' : 'Anggota dinonaktifkan.', 'success');
+  renderAnggotaList();
+}
+
+function openEditAnggotaForm(member, onSuccess) {
+  onSuccess = onSuccess || renderAnggotaList;
+  openModal('Edit Anggota — ' + escapeHtml(member.nomor_anggota),
+    '<div class="field"><label>Nomor Anggota</label><input class="input" value="' + escapeHtml(member.nomor_anggota) + '" disabled>' +
+      '<div class="text-small text-muted" style="margin-top:4px;">Nomor anggota tidak dapat diubah lewat form ini.</div></div>' +
+    field('Nama', 'nama', true) +
+    field('NIK/NIP', 'nik_nip', false) +
+    selectField('Jenis Kelamin', 'jenis_kelamin', [{ value: '', label: '(kosongkan)' }, { value: 'L', label: 'Laki-laki' }, { value: 'P', label: 'Perempuan' }], false) +
+    field('Unit', 'unit', false) +
+    field('Jabatan', 'jabatan', false) +
+    field('No HP', 'no_hp', false) +
+    field('Email', 'email', false),
+    async function (formData) {
+      setModalSubmitting(true, 'Simpan');
+      var res = await apiCall('updateMember', {
+        memberId: member.member_id,
+        patch: {
+          nama: formData.get('nama'), nik_nip: formData.get('nik_nip'),
+          jenis_kelamin: formData.get('jenis_kelamin'), unit: formData.get('unit'),
+          jabatan: formData.get('jabatan'), no_hp: formData.get('no_hp'), email: formData.get('email')
+        }
+      });
+      setModalSubmitting(false);
+      if (!res.success) { showToast(res.error.message, 'danger'); return; }
+      closeModal();
+      showToast('Data anggota berhasil diperbarui.', 'success');
+      onSuccess();
+    });
+  // Isi ulang nilai form dengan data anggota saat ini (openModal hanya
+  // menyiapkan field kosong -- ini yang membuatnya jadi form EDIT, bukan tambah baru).
+  var form = document.getElementById('dynamic-modal-form');
+  ['nama', 'nik_nip', 'jenis_kelamin', 'unit', 'jabatan', 'no_hp', 'email'].forEach(function (f) {
+    var input = form.querySelector('[name="' + f + '"]');
+    if (input) input.value = member[f] || '';
   });
 }
 
@@ -209,12 +280,15 @@ async function renderAnggotaDetail(memberId) {
   if (!res.success) return showError(res.error);
   var m = res.data;
   var st = getSimpleStatusView(m.status);
+  var canEdit = currentUser.role === 'ADMIN' || currentUser.role === 'PETUGAS';
 
   contentArea().innerHTML =
     '<button class="btn btn-ghost text-small" id="btn-back-anggota" style="margin-bottom:var(--space-4);">&larr; Kembali ke Daftar Anggota</button>' +
     '<div class="content-header"><div><h1 style="margin:0;">' + escapeHtml(m.nama) + '</h1>' +
       '<p class="text-muted" style="margin:4px 0 0;">' + escapeHtml(m.member_id) + ' &middot; ' + escapeHtml(m.unit || '-') +
-      ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div></div>' +
+      ' &middot; <span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></p></div>' +
+      (canEdit ? '<button class="btn btn-secondary text-small" id="btn-edit-anggota-detail">Edit</button>' : '') +
+    '</div>' +
     '<div class="grid-summary mb-6">' +
       summaryCard('Simpanan Wajib', formatRupiah(m.savings.wajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(m.savings.sukarela), '') +
@@ -230,6 +304,10 @@ async function renderAnggotaDetail(memberId) {
     '<h2 style="margin-top:var(--space-6);">Riwayat Pembayaran</h2>' + renderMiniTable(paymentsRes, ['tanggal', 'loan_id', 'nominal'], ['Tanggal', 'Pinjaman', 'Nominal']);
 
   document.getElementById('btn-back-anggota').addEventListener('click', renderAnggotaList);
+  var editBtn = document.getElementById('btn-edit-anggota-detail');
+  if (editBtn) editBtn.addEventListener('click', function () {
+    openEditAnggotaForm(m, function () { renderAnggotaDetail(memberId); });
+  });
 }
 
 function renderMiniTable(res, fields, labels) {
