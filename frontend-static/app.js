@@ -165,6 +165,149 @@
     if (isMobileMenuOpen()) closeMobileMenu(); else openMobileMenu();
   }
 
+
+
+  // ---- Pencarian global profesional (desktop + mobile) ----
+  var globalSearchTimer = null;
+  var globalSearchRequestSeq = 0;
+
+  function hideGlobalSearchResults() {
+    var box = document.getElementById('global-search-results');
+    if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+  }
+
+  function renderGlobalSearchResults(items, query) {
+    var box = document.getElementById('global-search-results');
+    if (!box) return;
+    if (!items || items.length === 0) {
+      box.innerHTML = '<div class="search-empty">Tidak ada hasil untuk <strong>' + escapeHtml(query) + '</strong>.</div>';
+      box.classList.add('open');
+      return;
+    }
+    var typeLabels = { ANGGOTA: 'Anggota', PINJAMAN: 'Pinjaman', PEMBAYARAN: 'Pembayaran', SIMPANAN: 'Simpanan', INFAQ: 'Infaq' };
+    var grouped = {};
+    items.forEach(function (it) {
+      if (!grouped[it.type]) grouped[it.type] = [];
+      grouped[it.type].push(it);
+    });
+    var html = '<div class="search-result-head"><span>Hasil pencarian</span><small>' + items.length + ' hasil</small></div>';
+    Object.keys(grouped).forEach(function (type) {
+      html += '<div class="search-result-group">' + escapeHtml(typeLabels[type] || type) + '</div>';
+      grouped[type].forEach(function (it) {
+        html += '<button type="button" class="search-result-item" data-search-page="' + escapeHtml(it.page || '') + '" ' +
+          'data-search-member="' + escapeHtml(it.member_id || '') + '" data-search-tab="' + escapeHtml(it.reportTab || '') + '">' +
+          '<span class="search-result-type">' + escapeHtml((typeLabels[it.type] || it.type).slice(0, 1)) + '</span>' +
+          '<span class="search-result-copy"><strong>' + escapeHtml(it.title || it.id || '-') + '</strong><small>' + escapeHtml(it.subtitle || '') + '</small></span>' +
+          '</button>';
+      });
+    });
+    box.innerHTML = html;
+    box.classList.add('open');
+  }
+
+  async function performGlobalSearch(query) {
+    var q = String(query || '').trim();
+    if (q.length < 2) { hideGlobalSearchResults(); return; }
+    var box = document.getElementById('global-search-results');
+    if (!box) return;
+
+    if (!currentUser || ['ADMIN', 'PETUGAS'].indexOf(currentUser.role) === -1) {
+      box.innerHTML = '<div class="search-empty">Pencarian data individu hanya tersedia untuk Admin dan Petugas. Gunakan <strong>Data Saya</strong> untuk melihat data pribadi.</div>';
+      box.classList.add('open');
+      return;
+    }
+
+    var seq = ++globalSearchRequestSeq;
+    box.innerHTML = '<div class="search-empty">Mencari...</div>';
+    box.classList.add('open');
+    var res = await apiCall('globalSearch', { query: q, limit: 15 });
+    if (seq !== globalSearchRequestSeq) return; // abaikan respons request lama
+    if (!res.success) {
+      box.innerHTML = '<div class="search-empty search-error">' + escapeHtml(res.error && res.error.message ? res.error.message : 'Pencarian gagal.') + '</div>';
+      return;
+    }
+    renderGlobalSearchResults(res.data.results || [], q);
+  }
+
+  function navigateFromSearchButton(btn) {
+    hideGlobalSearchResults();
+    var input = document.getElementById('global-search-input');
+    if (input) input.blur();
+    var header = document.querySelector('.header');
+    if (header) header.classList.remove('search-open');
+    var mobileBtn = document.getElementById('mobile-search-btn');
+    if (mobileBtn) mobileBtn.setAttribute('aria-expanded', 'false');
+
+    var page = btn.getAttribute('data-search-page');
+    var memberId = btn.getAttribute('data-search-member');
+    var reportTab = btn.getAttribute('data-search-tab');
+    if (input) input.value = '';
+
+    function setSearchNavActive(navKey) {
+      document.querySelectorAll('.nav-item').forEach(function (n) {
+        n.classList.toggle('active', n.getAttribute('data-page') === navKey);
+      });
+    }
+
+    if (page === 'anggota-detail' && memberId) {
+      setSearchNavActive('anggota-list');
+      currentDetailMemberId = memberId;
+      renderAnggotaDetail(memberId);
+      return;
+    }
+    if (page === 'laporan' && reportTab) {
+      setSearchNavActive('laporan');
+      laporanActiveTab = reportTab;
+      renderLaporan();
+      return;
+    }
+    if (page) { setSearchNavActive(page); renderView(page); }
+  }
+
+  function initGlobalSearchUi() {
+    var input = document.getElementById('global-search-input');
+    var box = document.getElementById('global-search-results');
+    var mobileBtn = document.getElementById('mobile-search-btn');
+    var header = document.querySelector('.header');
+    if (!input || !box) return;
+
+    input.addEventListener('input', function () {
+      clearTimeout(globalSearchTimer);
+      globalSearchTimer = setTimeout(function () { performGlobalSearch(input.value); }, 280);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        input.value = '';
+        hideGlobalSearchResults();
+        if (header) header.classList.remove('search-open');
+      }
+    });
+    box.addEventListener('click', function (e) {
+      var btn = e.target.closest('.search-result-item');
+      if (btn) navigateFromSearchButton(btn);
+    });
+    document.addEventListener('click', function (e) {
+      var searchBox = document.getElementById('global-search-box');
+      if (searchBox && !searchBox.contains(e.target) && e.target !== mobileBtn) hideGlobalSearchResults();
+    });
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (header) header.classList.add('search-open');
+        if (mobileBtn) mobileBtn.setAttribute('aria-expanded', 'true');
+        input.focus();
+      }
+    });
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', function () {
+        var open = header && header.classList.toggle('search-open');
+        mobileBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) setTimeout(function () { input.focus(); }, 30);
+        else hideGlobalSearchResults();
+      });
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     // Render awal (sidebar/header) dilakukan auth.js lewat onLoginSuccess()
     // setelah login/verifikasi token berhasil. initGoogleSignIn() TIDAK
@@ -172,6 +315,7 @@
     // memutuskan: pulihkan sesi tersimpan, coba auto-sign-in diam-diam,
     // atau baru render tombol manual sebagai fallback (lihat auth.js).
     tryRestoreSession();
+    initGlobalSearchUi();
 
     var menuBtn = document.getElementById('mobile-menu-btn');
     if (menuBtn) menuBtn.innerHTML = icon('menu');

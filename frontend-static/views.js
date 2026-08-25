@@ -667,6 +667,7 @@ function cryptoRandomId() {
 
 /* ============================================================ LAPORAN */
 var LAPORAN_TABS = [
+  { key: 'ringkasan', label: 'Ringkasan Keuangan', roles: ['ADMIN', 'PETUGAS', 'PIMPINAN', 'VIEWER'] },
   { key: 'anggota', label: 'Anggota', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'simpanan', label: 'Simpanan', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'infaq', label: 'Infaq', roles: ['ADMIN', 'PETUGAS'] },
@@ -674,37 +675,44 @@ var LAPORAN_TABS = [
   { key: 'pinjaman-aktif', label: 'Pinjaman Aktif', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'pinjaman-lunas', label: 'Pinjaman Lunas', roles: ['ADMIN', 'PETUGAS'] },
   { key: 'pembayaran', label: 'Pembayaran', roles: ['ADMIN', 'PETUGAS'] },
-  // "Rekap Periode" murni agregat (tidak merinci per-anggota) -- data umum,
-  // jadi PIMPINAN/VIEWER tetap boleh (aturan visibilitas data).
   { key: 'periode', label: 'Rekap Periode', roles: ['ADMIN', 'PETUGAS', 'PIMPINAN', 'VIEWER'] }
 ];
 var laporanActiveTab = 'anggota';
+var laporanExportData = { headers: [], rows: [], filename: 'laporan.csv' };
+var laporanFilterMeta = '';
 
 function laporanTabsForRole(role) {
   return LAPORAN_TABS.filter(function (t) { return t.roles.indexOf(role) > -1; });
 }
 
+function laporanTabInfo(key) {
+  return LAPORAN_TABS.filter(function (t) { return t.key === key; })[0] || { label: key };
+}
+
 async function renderLaporan() {
   setPageTitle('Laporan');
   var visibleTabs = laporanTabsForRole(currentUser.role);
-  // Kalau tab aktif saat ini tidak diizinkan utk role ini (mis. tersisa dari
-  // sesi ADMIN sebelumnya), pindah ke tab pertama yang boleh dilihat.
   if (visibleTabs.every(function (t) { return t.key !== laporanActiveTab; })) {
     laporanActiveTab = visibleTabs[0].key;
   }
   var tabsHtml = visibleTabs.map(function (t) {
-    var activeClass = t.key === laporanActiveTab ? ' btn-primary' : ' btn-secondary';
-    return '<button class="btn text-small' + activeClass + ' no-print" data-laporan-tab="' + t.key + '" style="margin:0 6px 6px 0;">' + escapeHtml(t.label) + '</button>';
+    return '<button class="report-tab' + (t.key === laporanActiveTab ? ' active' : '') + ' no-print" data-laporan-tab="' + t.key + '">' + escapeHtml(t.label) + '</button>';
   }).join('');
+
   contentArea().innerHTML =
-    '<div class="content-header no-print" style="align-items:flex-start;">' +
-      '<div style="flex-wrap:wrap;">' + tabsHtml + '</div>' +
-      '<button class="btn btn-secondary" id="btn-cetak-laporan">' + icon('printer', 'icon-sm') + 'Cetak Laporan</button>' +
-    '</div>' +
+    '<section class="report-hero no-print">' +
+      '<div><div class="eyebrow">PUSAT LAPORAN</div><h1>Pelaporan & Rekapitulasi</h1>' +
+      '<p>Analisis data operasional, posisi keuangan, dan transaksi ARISAN WK secara terstruktur.</p></div>' +
+      '<div class="report-actions">' +
+        '<button class="btn btn-secondary" id="btn-export-laporan">' + icon('fileText', 'icon-sm') + 'Export CSV</button>' +
+        '<button class="btn btn-primary" id="btn-cetak-laporan">' + icon('printer', 'icon-sm') + 'Cetak / PDF</button>' +
+      '</div>' +
+    '</section>' +
+    '<div class="report-tabs no-print">' + tabsHtml + '</div>' +
     (visibleTabs.length < LAPORAN_TABS.length
-      ? '<p class="text-small text-muted no-print">Sebagian laporan (per-anggota) tidak ditampilkan untuk role Anda -- lihat "Data Saya" untuk data pribadi.</p>'
+      ? '<div class="report-privacy-note no-print">Data individu anggota hanya tersedia untuk Admin/Petugas. Role Anda tetap dapat melihat laporan agregat.</div>'
       : '') +
-    '<div id="laporan-body"><div class="empty-state">Memuat...</div></div>';
+    '<div id="laporan-body"><div class="empty-state">Memuat laporan...</div></div>';
 
   contentArea().querySelectorAll('[data-laporan-tab]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -713,28 +721,15 @@ async function renderLaporan() {
     });
   });
   document.getElementById('btn-cetak-laporan').addEventListener('click', printLaporan);
+  document.getElementById('btn-export-laporan').addEventListener('click', exportLaporanCsv);
 
   await renderLaporanBody(laporanActiveTab);
 }
 
-/**
- * Isi header/footer cetak (Tahap 5 §27: nama aplikasi, judul, periode,
- * tanggal cetak; footer: dicetak oleh + waktu) lalu panggil window.print().
- * User memilih "Save as PDF" sebagai tujuan cetak di dialog browser --
- * ini yang jadi jalur "export PDF laporan" (Tahap 4 §48 Preview/Print/PDF)
- * tanpa perlu backend menyimpan file ke Drive.
- */
 function printLaporan() {
-  var tab = LAPORAN_TABS.filter(function (t) { return t.key === laporanActiveTab; })[0];
-  var judul = 'Laporan ' + (tab ? tab.label : '');
-  var periodeText;
-  if (laporanActiveTab === 'periode') {
-    var start = document.getElementById('periode-start');
-    var end = document.getElementById('periode-end');
-    periodeText = 'Periode: ' + (start ? formatTanggalID(start.value) : '-') + ' s/d ' + (end ? formatTanggalID(end.value) : '-');
-  } else {
-    periodeText = 'Kondisi terkini per ' + formatTanggalID(new Date());
-  }
+  var tab = laporanTabInfo(laporanActiveTab);
+  var judul = 'Laporan ' + tab.label;
+  var periodeText = laporanFilterMeta || ('Kondisi terkini per ' + formatTanggalID(new Date()));
   document.getElementById('print-report-title').textContent = judul;
   document.getElementById('print-report-meta').textContent = periodeText;
   document.getElementById('print-footer-text').textContent =
@@ -742,80 +737,110 @@ function printLaporan() {
   window.print();
 }
 
+function csvCell(value) {
+  var s = String(value === null || value === undefined ? '' : value);
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+function exportLaporanCsv() {
+  if (!laporanExportData || !laporanExportData.headers || laporanExportData.headers.length === 0) {
+    showToast('Laporan ini belum memiliki data tabular untuk diekspor.', 'danger');
+    return;
+  }
+  var lines = [laporanExportData.headers.map(csvCell).join(';')];
+  (laporanExportData.rows || []).forEach(function (row) { lines.push(row.map(csvCell).join(';')); });
+  var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = laporanExportData.filename || 'laporan-arisan-wk.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 500);
+}
+
+function normalizeSearchText(value) {
+  return String(value === null || value === undefined ? '' : value).toLowerCase();
+}
+
+function containsQuery(values, query) {
+  var q = normalizeSearchText(query).trim();
+  if (!q) return true;
+  return values.some(function (v) { return normalizeSearchText(v).indexOf(q) > -1; });
+}
+
+function reportFilterBar(innerHtml) {
+  return '<div class="report-filter-card no-print"><div class="report-filter-grid">' + innerHtml + '</div>' +
+    '<div class="report-filter-hint">Filter diterapkan langsung pada laporan yang tampil, dicetak, dan diekspor.</div></div>';
+}
+
+function reportSearchField(placeholder) {
+  return '<div class="field report-search-field"><label>Cari</label><input class="input" id="report-filter-search" type="search" placeholder="' + escapeHtml(placeholder || 'Cari data...') + '" autocomplete="off"></div>';
+}
+
+function reportSelectField(id, label, options) {
+  return '<div class="field"><label>' + escapeHtml(label) + '</label><select class="input" id="' + id + '">' +
+    options.map(function (o) { return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>'; }).join('') +
+    '</select></div>';
+}
+
+function reportDateField(id, label) {
+  return '<div class="field"><label>' + escapeHtml(label) + '</label><input class="input" id="' + id + '" type="date"></div>';
+}
+
+function reportSummaryStrip(cards) {
+  return '<div class="report-summary-strip">' + cards.map(function (c) {
+    return '<div class="report-metric"><span>' + escapeHtml(c.label) + '</span><strong class="' + (c.amount ? 'amount' : '') + '">' + escapeHtml(c.value) + '</strong>' +
+      (c.sub ? '<small>' + escapeHtml(c.sub) + '</small>' : '') + '</div>';
+  }).join('') + '</div>';
+}
+
+function setLaporanExport(headers, rows, filename, filterMeta) {
+  laporanExportData = { headers: headers, rows: rows, filename: filename };
+  laporanFilterMeta = filterMeta || '';
+}
+
+function bindReportFilter(ids, renderFn) {
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', renderFn);
+  });
+}
+
 async function renderLaporanBody(tabKey) {
   var body = document.getElementById('laporan-body');
   if (!body) return;
+  laporanFilterMeta = '';
+  laporanExportData = { headers: [], rows: [], filename: 'laporan.csv' };
 
-  await ensureMembersLoaded();
-
-  if (tabKey === 'anggota') {
-    var rows = membersCache.map(function (m) {
-      var st = getSimpleStatusView(m.status);
-      return '<tr><td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td>' +
-        '<td data-label="Nama">' + escapeHtml(m.nama) + '</td>' +
-        '<td data-label="No HP">' + escapeHtml(m.no_hp) + '</td>' +
-        '<td data-label="Status"><span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></td></tr>';
-    }).join('');
-    body.innerHTML = laporanTable(['Nomor', 'Nama', 'No HP', 'Status'], rows, membersCache.length);
-    return;
-  }
-
-  if (tabKey === 'simpanan') {
-    var res = await apiCall('getSavingRekapPerMember', {});
-    if (!res.success) return showLaporanError(res.error);
-    var rows = res.data.map(function (r) {
-      return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td>' +
-        '<td data-label="Wajib" class="col-amount amount">' + escapeHtml(formatRupiah(r.wajib)) + '</td>' +
-        '<td data-label="Sukarela" class="col-amount amount">' + escapeHtml(formatRupiah(r.sukarela)) + '</td>' +
-        '<td data-label="Total" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>';
-    }).join('');
-    body.innerHTML = laporanTable(['Anggota', 'Wajib', 'Sukarela', 'Total'], rows, res.data.length, ['col-amount', 'col-amount', 'col-amount']);
-    return;
-  }
-
-  if (tabKey === 'infaq') {
-    var res = await apiCall('getInfaqRekapPerMember', {});
-    if (!res.success) return showLaporanError(res.error);
-    var rows = res.data.map(function (r) {
-      return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td>' +
-        '<td data-label="Total Infaq" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>';
-    }).join('');
-    body.innerHTML = '<p class="text-small text-muted">Infaq dari donatur non-anggota tidak tampil di rekap per-anggota ini (lihat Total Infaq di Dashboard).</p>' +
-      laporanTable(['Anggota', 'Total Infaq'], rows, res.data.length);
-    return;
-  }
-
-  if (tabKey === 'pinjaman' || tabKey === 'pinjaman-aktif' || tabKey === 'pinjaman-lunas') {
-    var action = tabKey === 'pinjaman-aktif' ? 'getActiveLoans' : 'getLoans';
-    var payload = tabKey === 'pinjaman-lunas' ? { filter: { status: 'LUNAS' } } : {};
-    var res = await apiCall(action, payload);
-    if (!res.success) return showLaporanError(res.error);
-    var rows = res.data.map(function (l) {
-      var nilaiTampil = l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan;
-      var labelNilai = l.isDisbursed ? '' : ' <span class="text-small text-muted">(pengajuan)</span>';
-      return '<tr><td data-label="No Pinjaman">' + escapeHtml(l.loan_id) + '</td>' +
-        '<td data-label="Anggota">' + escapeHtml(memberNameById(l.member_id)) + '</td>' +
-        '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(nilaiTampil)) + labelNilai + '</td>' +
-        '<td data-label="Dibayar" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPembayaran)) + '</td>' +
-        '<td data-label="Sisa" class="col-amount amount">' + escapeHtml(formatRupiah(l.sisa)) + '</td>' +
-        '<td data-label="Status"><span class="badge ' + loanStatusBadgeClass(l.statusView) + '">' + escapeHtml(l.statusView) + '</span></td></tr>';
-    }).join('');
-    body.innerHTML = laporanTable(['No Pinjaman', 'Anggota', 'Pinjaman', 'Dibayar', 'Sisa', 'Status'], rows, res.data.length);
-    return;
-  }
-
-  if (tabKey === 'pembayaran') {
-    var res = await apiCall('getPayments', {});
-    if (!res.success) return showLaporanError(res.error);
-    var rows = res.data.map(function (p) {
-      return '<tr><td data-label="ID">' + escapeHtml(p.payment_id) + '</td>' +
-        '<td data-label="Tanggal">' + escapeHtml(p.tanggal) + '</td>' +
-        '<td data-label="Pinjaman">' + escapeHtml(p.loan_id) + '</td>' +
-        '<td data-label="Anggota">' + escapeHtml(memberNameById(p.member_id)) + '</td>' +
-        '<td data-label="Nominal" class="col-amount amount">' + escapeHtml(formatRupiah(p.nominal)) + '</td>' +
-        '<td data-label="Petugas">' + escapeHtml(p.petugas) + '</td></tr>';
-    }).join('');
-    body.innerHTML = laporanTable(['ID', 'Tanggal', 'Pinjaman', 'Anggota', 'Nominal', 'Petugas'], rows, res.data.length);
+  if (tabKey === 'ringkasan') {
+    var summaryRes = await apiCall('getDashboardSummary', {});
+    if (!summaryRes.success) return showLaporanError(summaryRes.error);
+    var d0 = summaryRes.data;
+    body.innerHTML =
+      '<div class="report-section-head"><div><h2>Ringkasan Keuangan Terkini</h2><p>Posisi saat ini, bukan aktivitas periode.</p></div><span class="report-asof">Per ' + escapeHtml(formatTanggalID(new Date())) + '</span></div>' +
+      '<div class="grid-summary">' +
+        summaryCard('Total Anggota', d0.totalAnggota, d0.anggotaAktif + ' aktif') +
+        summaryCard('Total Simpanan', formatRupiah(d0.totalSimpanan), 'Wajib ' + formatRupiah(d0.totalSimpananWajib) + ' + Sukarela ' + formatRupiah(d0.totalSimpananSukarela)) +
+        summaryCard('Total Infaq', formatRupiah(d0.totalInfaq), 'Terpisah dari simpanan') +
+        summaryCard('Total Piutang', formatRupiah(d0.totalPiutang), d0.jumlahPinjamanAktif + ' pinjaman aktif') +
+        summaryCard('Pinjaman Dicairkan', formatRupiah(d0.totalPinjamanDicairkan), '') +
+        summaryCard('Total Pembayaran', formatRupiah(d0.totalPembayaran), '') +
+        summaryCard('Pinjaman Aktif', d0.jumlahPinjamanAktif, '') +
+        summaryCard('Pinjaman Lunas', d0.jumlahPinjamanLunas, '') +
+      '</div>';
+    setLaporanExport(
+      ['Indikator', 'Nilai'],
+      [
+        ['Total Anggota', d0.totalAnggota], ['Anggota Aktif', d0.anggotaAktif],
+        ['Simpanan Wajib', d0.totalSimpananWajib], ['Simpanan Sukarela', d0.totalSimpananSukarela], ['Total Simpanan', d0.totalSimpanan],
+        ['Total Infaq', d0.totalInfaq], ['Pinjaman Dicairkan', d0.totalPinjamanDicairkan], ['Total Pembayaran', d0.totalPembayaran],
+        ['Total Piutang', d0.totalPiutang], ['Pinjaman Aktif', d0.jumlahPinjamanAktif], ['Pinjaman Lunas', d0.jumlahPinjamanLunas]
+      ],
+      'ringkasan-keuangan-arisan-wk.csv', 'Kondisi terkini per ' + formatTanggalID(new Date())
+    );
     return;
   }
 
@@ -823,14 +848,171 @@ async function renderLaporanBody(tabKey) {
     var today = new Date().toISOString().slice(0, 10);
     var firstOfMonth = today.slice(0, 8) + '01';
     body.innerHTML =
-      '<div class="card" style="margin-bottom:var(--space-4); display:flex; gap:var(--space-3); align-items:flex-end; flex-wrap:wrap;">' +
-        '<div class="field" style="margin:0;"><label>Tanggal Awal</label><input class="input" type="date" id="periode-start" value="' + firstOfMonth + '"></div>' +
-        '<div class="field" style="margin:0;"><label>Tanggal Akhir</label><input class="input" type="date" id="periode-end" value="' + today + '"></div>' +
-        '<button class="btn btn-primary" id="btn-periode-load">Tampilkan</button>' +
-      '</div>' +
-      '<div id="periode-result"></div>';
+      '<div class="report-section-head"><div><h2>Rekap Aktivitas Periode</h2><p>Arus transaksi yang benar-benar terjadi dalam rentang tanggal.</p></div></div>' +
+      reportFilterBar(
+        '<div class="field"><label>Tanggal Awal</label><input class="input" type="date" id="periode-start" value="' + firstOfMonth + '"></div>' +
+        '<div class="field"><label>Tanggal Akhir</label><input class="input" type="date" id="periode-end" value="' + today + '"></div>' +
+        '<div class="field report-filter-action"><label>&nbsp;</label><button class="btn btn-primary" id="btn-periode-load">Tampilkan</button></div>'
+      ) + '<div id="periode-result"></div>';
     document.getElementById('btn-periode-load').addEventListener('click', loadPeriodeReport);
     await loadPeriodeReport();
+    return;
+  }
+
+  await ensureMembersLoaded();
+
+  if (tabKey === 'anggota') {
+    var memberRows = membersCache.slice();
+    body.innerHTML = '<div class="report-section-head"><div><h2>Laporan Anggota</h2><p>Daftar anggota dengan pencarian dan filter status.</p></div></div>' +
+      reportFilterBar(reportSearchField('Nama, nomor anggota, HP, unit...') + reportSelectField('report-filter-status', 'Status', [
+        { value: '', label: 'Semua status' }, { value: 'AKTIF', label: 'Aktif' }, { value: 'TIDAK AKTIF', label: 'Tidak Aktif' }
+      ])) + '<div id="report-table-result"></div>';
+    var renderMembers = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var status = document.getElementById('report-filter-status').value;
+      var filtered = memberRows.filter(function (m) {
+        return (!status || m.status === status) && containsQuery([m.nomor_anggota, m.nama, m.no_hp, m.email, m.unit, m.jabatan], q);
+      });
+      var rows = filtered.map(function (m) {
+        var st = getSimpleStatusView(m.status);
+        return '<tr><td data-label="Nomor">' + escapeHtml(m.nomor_anggota) + '</td><td data-label="Nama">' + escapeHtml(m.nama) + '</td>' +
+          '<td data-label="Unit">' + escapeHtml(m.unit || '-') + '</td><td data-label="No HP">' + escapeHtml(m.no_hp || '-') + '</td>' +
+          '<td data-label="Status"><span class="badge ' + st.badgeClass + '">' + escapeHtml(st.label) + '</span></td></tr>';
+      }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([
+        { label: 'Data Tampil', value: filtered.length + ' anggota' },
+        { label: 'Aktif', value: filtered.filter(function (m) { return m.status === 'AKTIF'; }).length + ' anggota' },
+        { label: 'Tidak Aktif', value: filtered.filter(function (m) { return m.status !== 'AKTIF'; }).length + ' anggota' }
+      ]) + laporanTable(['Nomor', 'Nama', 'Unit', 'No HP', 'Status'], rows, filtered.length);
+      setLaporanExport(['Nomor Anggota', 'Nama', 'Unit', 'No HP', 'Email', 'Status'], filtered.map(function (m) {
+        return [m.nomor_anggota, m.nama, m.unit || '', m.no_hp || '', m.email || '', m.status];
+      }), 'laporan-anggota-arisan-wk.csv', 'Filter: ' + (status || 'Semua status') + (q ? ' • Pencarian: ' + q : ''));
+    };
+    bindReportFilter(['report-filter-search', 'report-filter-status'], renderMembers);
+    renderMembers();
+    return;
+  }
+
+  if (tabKey === 'simpanan') {
+    var savingRes = await apiCall('getSavingRekapPerMember', {});
+    if (!savingRes.success) return showLaporanError(savingRes.error);
+    var savingRows = savingRes.data;
+    body.innerHTML = '<div class="report-section-head"><div><h2>Rekap Simpanan per Anggota</h2><p>Akumulasi simpanan wajib dan sukarela.</p></div></div>' +
+      reportFilterBar(reportSearchField('Cari nama anggota...')) + '<div id="report-table-result"></div>';
+    var renderSavings = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var filtered = savingRows.filter(function (r) { return containsQuery([r.nama, r.member_id], q); });
+      var totalWajib = filtered.reduce(function (s, r) { return s + Number(r.wajib || 0); }, 0);
+      var totalSukarela = filtered.reduce(function (s, r) { return s + Number(r.sukarela || 0); }, 0);
+      var rows = filtered.map(function (r) {
+        return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td><td data-label="Wajib" class="col-amount amount">' + escapeHtml(formatRupiah(r.wajib)) + '</td>' +
+          '<td data-label="Sukarela" class="col-amount amount">' + escapeHtml(formatRupiah(r.sukarela)) + '</td><td data-label="Total" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>';
+      }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([
+        { label: 'Simpanan Wajib', value: formatRupiah(totalWajib), amount: true },
+        { label: 'Simpanan Sukarela', value: formatRupiah(totalSukarela), amount: true },
+        { label: 'Total Simpanan', value: formatRupiah(totalWajib + totalSukarela), amount: true }
+      ]) + laporanTable(['Anggota', 'Wajib', 'Sukarela', 'Total'], rows, filtered.length, ['', 'col-amount', 'col-amount', 'col-amount']);
+      setLaporanExport(['Anggota', 'Simpanan Wajib', 'Simpanan Sukarela', 'Total'], filtered.map(function (r) { return [r.nama, r.wajib, r.sukarela, r.total]; }),
+        'rekap-simpanan-arisan-wk.csv', q ? 'Pencarian: ' + q : 'Seluruh anggota');
+    };
+    bindReportFilter(['report-filter-search'], renderSavings);
+    renderSavings();
+    return;
+  }
+
+  if (tabKey === 'infaq') {
+    var infaqRes = await apiCall('getInfaqRekapPerMember', {});
+    if (!infaqRes.success) return showLaporanError(infaqRes.error);
+    var infaqRows = infaqRes.data;
+    body.innerHTML = '<div class="report-section-head"><div><h2>Rekap Infaq per Anggota</h2><p>Infaq anggota; donatur umum tetap masuk total Dashboard tetapi tidak dirinci di sini.</p></div></div>' +
+      reportFilterBar(reportSearchField('Cari nama anggota...')) + '<div id="report-table-result"></div>';
+    var renderInfaq = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var filtered = infaqRows.filter(function (r) { return containsQuery([r.nama, r.member_id], q); });
+      var total = filtered.reduce(function (s, r) { return s + Number(r.total || 0); }, 0);
+      var rows = filtered.map(function (r) { return '<tr><td data-label="Anggota">' + escapeHtml(r.nama) + '</td><td data-label="Total Infaq" class="col-amount amount">' + escapeHtml(formatRupiah(r.total)) + '</td></tr>'; }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([{ label: 'Total Infaq Tampil', value: formatRupiah(total), amount: true }, { label: 'Jumlah Anggota', value: filtered.length + ' anggota' }]) +
+        laporanTable(['Anggota', 'Total Infaq'], rows, filtered.length, ['', 'col-amount']);
+      setLaporanExport(['Anggota', 'Total Infaq'], filtered.map(function (r) { return [r.nama, r.total]; }), 'rekap-infaq-arisan-wk.csv', q ? 'Pencarian: ' + q : 'Seluruh anggota dengan infaq');
+    };
+    bindReportFilter(['report-filter-search'], renderInfaq);
+    renderInfaq();
+    return;
+  }
+
+  if (tabKey === 'pinjaman' || tabKey === 'pinjaman-aktif' || tabKey === 'pinjaman-lunas') {
+    var action = tabKey === 'pinjaman-aktif' ? 'getActiveLoans' : 'getLoans';
+    var payload = tabKey === 'pinjaman-lunas' ? { filter: { status: 'LUNAS' } } : {};
+    var loanRes = await apiCall(action, payload);
+    if (!loanRes.success) return showLaporanError(loanRes.error);
+    var loanRows = loanRes.data;
+    var fixedStatus = tabKey === 'pinjaman-aktif' ? 'AKTIF' : (tabKey === 'pinjaman-lunas' ? 'LUNAS' : '');
+    var statusOptions = [
+      { value: '', label: 'Semua status' }, { value: 'DIAJUKAN', label: 'Diajukan' }, { value: 'DISETUJUI', label: 'Disetujui' },
+      { value: 'AKTIF', label: 'Aktif' }, { value: 'LUNAS', label: 'Lunas' }, { value: 'DITOLAK', label: 'Ditolak' }, { value: 'DIBATALKAN', label: 'Dibatalkan' }
+    ];
+    body.innerHTML = '<div class="report-section-head"><div><h2>' + escapeHtml(laporanTabInfo(tabKey).label) + '</h2><p>Posisi pinjaman, pembayaran, dan sisa kewajiban.</p></div></div>' +
+      reportFilterBar(reportSearchField('No pinjaman atau nama anggota...') + (fixedStatus ? '' : reportSelectField('report-filter-status', 'Status', statusOptions))) + '<div id="report-table-result"></div>';
+    var renderLoans = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var statusEl = document.getElementById('report-filter-status');
+      var status = fixedStatus || (statusEl ? statusEl.value : '');
+      var filtered = loanRows.filter(function (l) {
+        return (!status || l.statusView === status || l.status === status) && containsQuery([l.loan_id, memberNameById(l.member_id), l.member_id, l.statusView], q);
+      });
+      var totalPinjaman = filtered.reduce(function (s, l) { return s + Number(l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan || 0); }, 0);
+      var totalDibayar = filtered.reduce(function (s, l) { return s + Number(l.totalPembayaran || 0); }, 0);
+      var totalSisa = filtered.reduce(function (s, l) { return s + Number(l.sisa || 0); }, 0);
+      var rows = filtered.map(function (l) {
+        var nilaiTampil = l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan;
+        var labelNilai = l.isDisbursed ? '' : ' <span class="text-small text-muted">(pengajuan)</span>';
+        return '<tr><td data-label="No Pinjaman">' + escapeHtml(l.loan_id) + '</td><td data-label="Anggota">' + escapeHtml(memberNameById(l.member_id)) + '</td>' +
+          '<td data-label="Pinjaman" class="col-amount amount">' + escapeHtml(formatRupiah(nilaiTampil)) + labelNilai + '</td>' +
+          '<td data-label="Dibayar" class="col-amount amount">' + escapeHtml(formatRupiah(l.totalPembayaran)) + '</td><td data-label="Sisa" class="col-amount amount">' + escapeHtml(formatRupiah(l.sisa)) + '</td>' +
+          '<td data-label="Status"><span class="badge ' + loanStatusBadgeClass(l.statusView) + '">' + escapeHtml(l.statusView) + '</span></td></tr>';
+      }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([
+        { label: 'Nilai Pinjaman', value: formatRupiah(totalPinjaman), amount: true }, { label: 'Total Dibayar', value: formatRupiah(totalDibayar), amount: true },
+        { label: 'Sisa Piutang', value: formatRupiah(totalSisa), amount: true }, { label: 'Jumlah Data', value: filtered.length + ' pinjaman' }
+      ]) + laporanTable(['No Pinjaman', 'Anggota', 'Pinjaman', 'Dibayar', 'Sisa', 'Status'], rows, filtered.length, ['', '', 'col-amount', 'col-amount', 'col-amount', '']);
+      setLaporanExport(['No Pinjaman', 'Anggota', 'Pinjaman', 'Dibayar', 'Sisa', 'Status'], filtered.map(function (l) {
+        return [l.loan_id, memberNameById(l.member_id), l.isDisbursed ? l.totalPinjaman : l.nominalPengajuan, l.totalPembayaran, l.sisa, l.statusView];
+      }), 'laporan-pinjaman-arisan-wk.csv', 'Filter: ' + (status || 'Semua status') + (q ? ' • Pencarian: ' + q : ''));
+    };
+    bindReportFilter(['report-filter-search', 'report-filter-status'], renderLoans);
+    renderLoans();
+    return;
+  }
+
+  if (tabKey === 'pembayaran') {
+    var paymentRes = await apiCall('getPayments', {});
+    if (!paymentRes.success) return showLaporanError(paymentRes.error);
+    var paymentRows = paymentRes.data;
+    body.innerHTML = '<div class="report-section-head"><div><h2>Laporan Pembayaran</h2><p>Riwayat pembayaran pinjaman dengan filter pencarian dan tanggal.</p></div></div>' +
+      reportFilterBar(reportSearchField('ID pembayaran, pinjaman, anggota...') + reportDateField('report-date-start', 'Dari') + reportDateField('report-date-end', 'Sampai')) + '<div id="report-table-result"></div>';
+    var renderPayments = function () {
+      var q = document.getElementById('report-filter-search').value;
+      var start = document.getElementById('report-date-start').value;
+      var end = document.getElementById('report-date-end').value;
+      var filtered = paymentRows.filter(function (p) {
+        var ds = String(p.tanggal || '').slice(0, 10);
+        var dateOk = (!start || ds >= start) && (!end || ds <= end);
+        return dateOk && containsQuery([p.payment_id, p.loan_id, memberNameById(p.member_id), p.member_id, p.petugas, p.metode, p.keterangan], q);
+      });
+      var total = filtered.reduce(function (s, p) { return s + Number(p.nominal || 0); }, 0);
+      var rows = filtered.map(function (p) {
+        return '<tr><td data-label="ID">' + escapeHtml(p.payment_id) + '</td><td data-label="Tanggal">' + escapeHtml(p.tanggal) + '</td><td data-label="Pinjaman">' + escapeHtml(p.loan_id) + '</td>' +
+          '<td data-label="Anggota">' + escapeHtml(memberNameById(p.member_id)) + '</td><td data-label="Nominal" class="col-amount amount">' + escapeHtml(formatRupiah(p.nominal)) + '</td><td data-label="Petugas">' + escapeHtml(p.petugas) + '</td></tr>';
+      }).join('');
+      document.getElementById('report-table-result').innerHTML = reportSummaryStrip([{ label: 'Total Pembayaran', value: formatRupiah(total), amount: true }, { label: 'Jumlah Transaksi', value: filtered.length + ' transaksi' }]) +
+        laporanTable(['ID', 'Tanggal', 'Pinjaman', 'Anggota', 'Nominal', 'Petugas'], rows, filtered.length, ['', '', '', '', 'col-amount', '']);
+      var meta = (start || end) ? 'Periode: ' + (start || '-') + ' s/d ' + (end || '-') : 'Seluruh periode';
+      if (q) meta += ' • Pencarian: ' + q;
+      setLaporanExport(['ID Pembayaran', 'Tanggal', 'No Pinjaman', 'Anggota', 'Nominal', 'Petugas'], filtered.map(function (p) { return [p.payment_id, p.tanggal, p.loan_id, memberNameById(p.member_id), p.nominal, p.petugas]; }), 'laporan-pembayaran-arisan-wk.csv', meta);
+    };
+    bindReportFilter(['report-filter-search', 'report-date-start', 'report-date-end'], renderPayments);
+    renderPayments();
     return;
   }
 }
@@ -839,12 +1021,16 @@ async function loadPeriodeReport() {
   var resultEl = document.getElementById('periode-result');
   var start = document.getElementById('periode-start').value;
   var end = document.getElementById('periode-end').value;
+  if (!start || !end || start > end) {
+    resultEl.innerHTML = '<div class="alert alert-danger">Rentang tanggal tidak valid. Pastikan tanggal awal tidak melebihi tanggal akhir.</div>';
+    return;
+  }
   resultEl.innerHTML = '<div class="empty-state">Memuat...</div>';
   var res = await apiCall('getPeriodReport', { startDate: start, endDate: end });
   if (!res.success) { resultEl.innerHTML = '<div class="alert alert-danger">' + escapeHtml(res.error.message) + '</div>'; return; }
   var d = res.data;
   resultEl.innerHTML =
-    '<p class="text-small text-muted">Aktivitas transaksi PADA PERIODE ini -- berbeda dari saldo terkini di Dashboard (lihat Tahap 5 §36).</p>' +
+    '<div class="report-period-note">Aktivitas pada periode ini berbeda dari saldo terkini. Nilai di bawah hanya menghitung transaksi yang benar-benar terjadi pada tanggal terpilih.</div>' +
     '<div class="grid-summary">' +
       summaryCard('Simpanan Wajib', formatRupiah(d.simpananWajib), '') +
       summaryCard('Simpanan Sukarela', formatRupiah(d.simpananSukarela), '') +
@@ -853,19 +1039,26 @@ async function loadPeriodeReport() {
       summaryCard('Pembayaran', formatRupiah(d.pembayaran), '') +
       summaryCard('Jumlah Transaksi', d.jumlahTransaksi, '') +
     '</div>';
+  var periodeLabel = 'Periode: ' + formatTanggalID(start) + ' s/d ' + formatTanggalID(end);
+  setLaporanExport(['Indikator', 'Nilai'], [
+    ['Simpanan Wajib', d.simpananWajib], ['Simpanan Sukarela', d.simpananSukarela], ['Infaq', d.infaq],
+    ['Pinjaman Dicairkan', d.pinjamanDicairkan], ['Pembayaran', d.pembayaran], ['Jumlah Transaksi', d.jumlahTransaksi]
+  ], 'rekap-periode-' + start + '-sd-' + end + '.csv', periodeLabel);
 }
 
 function laporanTable(headers, rowsHtml, count, amountCols) {
-  if (count === 0) return '<div class="empty-state">Belum ada data.</div>';
+  if (count === 0) return '<div class="empty-state">Tidak ada data yang sesuai dengan filter.</div>';
   var thead = headers.map(function (h, i) {
     return '<th' + (amountCols && amountCols[i] ? ' class="col-amount"' : '') + '>' + escapeHtml(h) + '</th>';
   }).join('');
-  return '<div class="table-wrap"><table class="data-table"><thead><tr>' + thead + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  return '<div class="report-table-meta no-print"><strong>' + count + '</strong> data ditampilkan</div>' +
+    '<div class="table-wrap"><table class="data-table"><thead><tr>' + thead + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
 function showLaporanError(err) {
   var body = document.getElementById('laporan-body');
-  if (body) body.innerHTML = '<div class="alert alert-danger">' + escapeHtml(err && err.message) + '</div>';
+  if (body) body.innerHTML = '<div class="alert alert-danger">' + escapeHtml(err && err.message ? err.message : 'Gagal memuat laporan.') + '</div>';
 }
+
 
 /* ============================================================ PENGGUNA (ADMIN only) */
 var ROLE_OPTIONS = [

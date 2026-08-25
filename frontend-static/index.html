@@ -51,9 +51,13 @@
         <button class="mobile-menu-btn" id="mobile-menu-btn" type="button" aria-label="Buka menu" aria-expanded="false"></button>
         <div class="page-title" id="page-title">Dashboard</div>
         <div class="header-right">
-          <div class="search">
+          <button class="mobile-search-btn" id="mobile-search-btn" type="button" aria-label="Buka pencarian" aria-expanded="false">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+          <div class="search" id="global-search-box">
             <svg class="icon icon-sm search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input class="input" type="search" placeholder="Cari anggota, pinjaman..." aria-label="Pencarian global">
+            <input class="input" id="global-search-input" type="search" placeholder="Cari anggota, pinjaman, transaksi..." aria-label="Pencarian global" autocomplete="off">
+            <div class="global-search-results" id="global-search-results" role="listbox" aria-label="Hasil pencarian"></div>
           </div>
           <div class="user-chip" id="header-user-chip"></div>
         </div>
