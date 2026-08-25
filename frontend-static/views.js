@@ -480,12 +480,32 @@ function openAnggotaForm() {
     });
 }
 
+/**
+ * Buang bagian desimal/sen di AKHIR string SEBELUM memisahkan angka --
+ * PERBAIKAN TEMUAN AUDIT (MEDIUM): sebelumnya titik/koma desimal ikut
+ * dibuang sebagai "bukan digit" tanpa dibedakan dari titik pemisah ribuan,
+ * sehingga nilai tempel dari Excel semacam "1000000.50" terbaca sebagai
+ * "100000050" -- 100x lebih besar dari yang dimaksud. Semua nominal di
+ * aplikasi ini SELALU bilangan bulat (tidak ada sen), jadi bagian desimal
+ * aman dibuang sepenuhnya.
+ *
+ * Pembeda: pemisah RIBUAN selalu diikuti PERSIS 3 digit per grup
+ * ("1.000.000"); pemisah DESIMAL diikuti 1-2 digit lalu AKHIR string
+ * ("1000000.5" / "1000000,50"). Kalau titik/koma TERAKHIR diikuti 1-2
+ * digit lalu selesai, itu desimal -- potong dari situ.
+ */
+function stripDecimalTail_(raw) {
+  var m = raw.match(/[.,]\d{1,2}$/);
+  return m ? raw.slice(0, raw.length - m[0].length) : raw;
+}
 function parseRupiahInput(value) {
-  var digits = String(value == null ? '' : value).replace(/\D/g, '');
+  var raw = stripDecimalTail_(String(value == null ? '' : value));
+  var digits = raw.replace(/\D/g, '');
   return digits ? Number(digits) : 0;
 }
 function formatRupiahInput(value) {
-  var digits = String(value == null ? '' : value).replace(/\D/g, '');
+  var raw = stripDecimalTail_(String(value == null ? '' : value));
+  var digits = raw.replace(/\D/g, '');
   return digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
 }
 // Semua input nominal Rupiah otomatis memakai pemisah ribuan Indonesia saat diketik.
@@ -810,7 +830,8 @@ async function renderPinjamanList(openFormDirectly) {
       actions = '<button class="btn btn-secondary text-small" data-action="approve" data-loan="' + l.loan_id + '">' + icon('check', 'icon-sm') + 'Setujui</button> ' +
                 '<button class="btn btn-danger text-small" data-action="reject" data-loan="' + l.loan_id + '">' + icon('x', 'icon-sm') + 'Tolak</button>';
     } else if (isAdmin && l.status === 'DISETUJUI') {
-      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.nominalPengajuan + '">' + icon('creditCard', 'icon-sm') + 'Cairkan</button>';
+      actions = '<button class="btn btn-primary text-small" data-action="disburse" data-loan="' + l.loan_id + '" data-nominal="' + l.nominalPengajuan + '">' + icon('creditCard', 'icon-sm') + 'Cairkan</button> ' +
+                '<button class="btn btn-danger text-small" data-action="cancel-approved" data-loan="' + l.loan_id + '">' + icon('x', 'icon-sm') + 'Batalkan</button>';
     }
     // Sebelum dicairkan, "Total Pinjaman" MEMANG Rp0 (belum ada uang yang
     // benar-benar keluar, lihat CalculationService.calcLoanCore_) -- supaya
@@ -835,7 +856,7 @@ async function renderPinjamanList(openFormDirectly) {
 
   var btnAdd = document.getElementById('btn-add-pinjaman');
   if (btnAdd) btnAdd.addEventListener('click', openPinjamanForm);
-  contentArea().querySelectorAll('[data-action="approve"],[data-action="reject"]').forEach(function (btn) {
+  contentArea().querySelectorAll('[data-action="approve"],[data-action="reject"],[data-action="cancel-approved"]').forEach(function (btn) {
     btn.addEventListener('click', function () { handleLoanAction(btn.dataset.action, btn.dataset.loan); });
   });
   contentArea().querySelectorAll('[data-action="disburse"]').forEach(function (btn) {
@@ -858,6 +879,15 @@ async function handleLoanAction(action, loanId, reason) {
     var res2 = await apiCall('rejectLoan', { loanId: loanId, reason: alasan });
     if (!res2.success) return showToast(res2.error.message, 'danger');
     showToast('Pinjaman ditolak.', 'success');
+    renderPinjamanList();
+  } else if (action === 'cancel-approved') {
+    // Temuan Audit MEDIUM: sebelumnya tidak ada jalur untuk membatalkan
+    // pinjaman yang SUDAH disetujui tapi belum dicairkan.
+    var alasanBatal = prompt('Pinjaman ini sudah DISETUJUI. Alasan pembatalan (wajib diisi):');
+    if (!alasanBatal) return;
+    var res3 = await apiCall('cancelApprovedLoan', { loanId: loanId, reason: alasanBatal });
+    if (!res3.success) return showToast(res3.error.message, 'danger');
+    showToast('Pinjaman dibatalkan.', 'success');
     renderPinjamanList();
   }
 }
