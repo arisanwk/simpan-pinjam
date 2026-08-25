@@ -580,9 +580,28 @@ async function renderPenarikanSimpanan() {
   if (btn) btn.addEventListener('click', openPenarikanSimpananForm);
 }
 
-function openPenarikanSimpananForm(prefillMemberId) {
-  var memberOptions = [{ value: '', label: 'Pilih anggota' }].concat(membersCache.filter(function (m) { return m.status === 'AKTIF'; })
-    .map(function (m) { return { value: m.member_id, label: m.nama + ' (' + m.nomor_anggota + ')' }; }));
+async function openPenarikanSimpananForm(prefillMemberId) {
+  // Ambil anggota langsung dari backend setiap form dibuka. Jangan hanya
+  // mengandalkan cache halaman agar dropdown tidak kosong karena cache lama/gagal load.
+  var membersRes = await apiCall('getMembers', { filter: { status: 'AKTIF' } });
+  if (!membersRes.success) {
+    showToast((membersRes.error && membersRes.error.message) || 'Data anggota gagal dimuat.', 'danger');
+    return;
+  }
+  var activeMembers = (membersRes.data || []).filter(function (m) {
+    return String(m.status || '').trim().toUpperCase() === 'AKTIF';
+  }).sort(function (a, b) { return String(a.nama || '').localeCompare(String(b.nama || ''), 'id'); });
+
+  // Sinkronkan cache supaya nama anggota di tabel/halaman lain ikut tersedia.
+  membersCache = membersRes.data || [];
+  membersCacheLoaded = true;
+
+  var memberOptions = [{ value: '', label: activeMembers.length ? 'Pilih anggota' : 'Tidak ada anggota aktif' }]
+    .concat(activeMembers.map(function (m) {
+      var no = m.nomor_anggota ? ' • ' + m.nomor_anggota : '';
+      return { value: m.member_id, label: (m.nama || m.member_id) + no };
+    }));
+
   openModal('Tarik Simpanan',
     '<div class="alert alert-warning withdrawal-note">Nominal tidak dapat melebihi saldo jenis simpanan yang dipilih. Sistem akan memvalidasi ulang saldo saat transaksi disimpan.</div>' +
     selectField('Anggota', 'member_id', memberOptions, true) +
@@ -592,11 +611,16 @@ function openPenarikanSimpananForm(prefillMemberId) {
     selectField('Metode', 'metode', [{ value: 'TUNAI', label: 'Tunai' }, { value: 'TRANSFER', label: 'Transfer' }], true) +
     field('Keterangan / Keperluan', 'keterangan', false),
     async function (formData) {
+      var memberId = formData.get('member_id');
+      var jenis = formData.get('jenis');
       var nominal = Number(formData.get('nominal'));
+      if (!memberId) { showToast('Pilih anggota terlebih dahulu.', 'danger'); return; }
       if (!nominal || nominal <= 0) { showToast('Nominal penarikan harus lebih dari 0.', 'danger'); return; }
+      var maxSaldo = Number(document.querySelector('[name="nominal"]').max || 0);
+      if (maxSaldo >= 0 && nominal > maxSaldo) { showToast('Nominal melebihi saldo ' + String(jenis).toLowerCase() + ' yang tersedia.', 'danger'); return; }
       setModalSubmitting(true, 'Proses Penarikan');
       var res = await apiCall('createSavingWithdrawal', {
-        member_id: formData.get('member_id'), jenis: formData.get('jenis'), nominal: nominal,
+        member_id: memberId, jenis: jenis, nominal: nominal,
         metode: formData.get('metode'), keterangan: formData.get('keterangan'), clientRequestId: cryptoRandomId()
       });
       setModalSubmitting(false, 'Proses Penarikan');
@@ -610,24 +634,40 @@ function openPenarikanSimpananForm(prefillMemberId) {
   var memberSelect = form.querySelector('[name="member_id"]');
   var jenisSelect = form.querySelector('[name="jenis"]');
   var nominalInput = form.querySelector('[name="nominal"]');
-  if (prefillMemberId) memberSelect.value = prefillMemberId;
+  if (!activeMembers.length) memberSelect.disabled = true;
+  if (prefillMemberId && activeMembers.some(function (m) { return m.member_id === prefillMemberId; })) memberSelect.value = prefillMemberId;
+
   var refreshBalance = async function () {
     var memberId = memberSelect.value;
     var box = document.getElementById('withdrawal-balance-box');
-    if (!memberId) { box.innerHTML = '<span>Saldo tersedia</span><strong>Pilih anggota dan jenis simpanan</strong>'; return; }
-    box.innerHTML = '<span>Saldo tersedia</span><strong>Memuat...</strong>';
+    nominalInput.value = '';
+    nominalInput.max = '0';
+    if (!memberId) {
+      box.innerHTML = '<span>Saldo tersedia</span><strong>Pilih anggota dan jenis simpanan</strong>';
+      return;
+    }
+    var selected = activeMembers.filter(function (m) { return m.member_id === memberId; })[0];
+    box.innerHTML = '<span>Saldo ' + escapeHtml(jenisSelect.value.toLowerCase()) + '</span><strong>Memuat saldo ' + escapeHtml(selected ? selected.nama : '') + '...</strong>';
     var balanceRes = await apiCall('getMemberSavings', { memberId: memberId });
-    if (!balanceRes.success) { box.innerHTML = '<span>Saldo tersedia</span><strong>Gagal memuat saldo</strong>'; return; }
-    var b = balanceRes.data;
-    var available = jenisSelect.value === 'WAJIB' ? b.wajib : b.sukarela;
-    box.innerHTML = '<span>Saldo ' + escapeHtml(jenisSelect.value.toLowerCase()) + '</span><strong class="amount">' + escapeHtml(formatRupiah(available)) + '</strong><small>Total simpanan: ' + escapeHtml(formatRupiah(b.total)) + '</small>';
-    nominalInput.max = String(Math.max(0, Number(available || 0)));
+    if (!balanceRes.success) {
+      box.innerHTML = '<span>Saldo tersedia</span><strong>Gagal memuat saldo anggota</strong><small>' + escapeHtml((balanceRes.error && balanceRes.error.message) || '') + '</small>';
+      return;
+    }
+    var b = balanceRes.data || {};
+    var wajib = Number(b.wajib || 0), sukarela = Number(b.sukarela || 0), total = Number(b.total || 0);
+    var available = jenisSelect.value === 'WAJIB' ? wajib : sukarela;
+    box.innerHTML = '<span>' + escapeHtml(selected ? selected.nama : memberId) + '</span>' +
+      '<strong class="amount">Saldo ' + escapeHtml(jenisSelect.value.toLowerCase()) + ': ' + escapeHtml(formatRupiah(available)) + '</strong>' +
+      '<small>Wajib: ' + escapeHtml(formatRupiah(wajib)) + ' • Sukarela: ' + escapeHtml(formatRupiah(sukarela)) + ' • Total: ' + escapeHtml(formatRupiah(total)) + '</small>';
+    nominalInput.max = String(Math.max(0, available));
+    nominalInput.disabled = available <= 0;
+    if (available <= 0) showToast('Anggota ini tidak memiliki saldo ' + jenisSelect.value.toLowerCase() + ' yang dapat ditarik.', 'warning');
+    else nominalInput.disabled = false;
   };
   memberSelect.addEventListener('change', refreshBalance);
   jenisSelect.addEventListener('change', refreshBalance);
-  if (prefillMemberId) refreshBalance();
+  if (prefillMemberId && memberSelect.value) refreshBalance();
 }
-
 /* ============================================================ INFAQ */
 async function renderInfaqList() {
   setPageTitle('Infaq');
