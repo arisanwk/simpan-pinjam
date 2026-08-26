@@ -14,16 +14,15 @@
 // di server (lihat Code.gs) -- currentUser di client murni untuk keperluan
 // tampilan (render menu sesuai role), bukan sumber otorisasi.
 //
-// "Tetap login besok tanpa klik apapun": token ID Google cuma berlaku
-// ~1 jam, jadi menyimpannya lama sendirian tidak cukup. Solusinya dua
-// lapis (lihat tryRestoreSession()):
-//   (a) token tersimpan (localStorage) dicoba dulu -- cepat, cukup untuk
-//       "buka lagi beberapa menit/jam kemudian";
-//   (b) kalau sudah kedaluwarsa/tidak ada, coba Google One Tap auto-select
-//       (attemptSilentSignIn()) -- selama user MASIH login Google di
-//       browser/HP itu, Google akan memberi token baru tanpa user klik
-//       apapun. Hanya kalau ini juga gagal (mis. sudah logout dari Google,
-//       atau ganti akun), baru layar login manual (tombol) ditampilkan.
+// "Tetap login lama tanpa klik apapun": token ID Google cuma berlaku ~1
+// jam, dan auto-sign-in diam-diam Google (One Tap) punya batas keandalan
+// sendiri di luar kendali aplikasi ini (Google membatasi seberapa sering
+// itu boleh muncul otomatis) -- jadi mengandalkan itu SAJA membuat user
+// diminta login ulang lebih sering dari yang seharusnya. Solusinya: sesi
+// aplikasi SENDIRI yang bertahan 30 hari (SessionService.gs di backend),
+// dibuat SEKALI setelah login pertama berhasil lewat Google, dipakai untuk
+// SEMUA request berikutnya -- Google cuma perlu dihubungi lagi kalau sesi
+// 30 hari itu sendiri sudah habis atau di-logout manual.
 
 let currentUser = null;
 
@@ -90,35 +89,46 @@ async function handleCredentialResponse(response) {
     return;
   }
 
+  setStoredSessionToken(result.data.sessionToken); // sesi 30 hari, lihat SessionService.gs
   currentUser = result.data;
   onLoginSuccess(currentUser);
 }
 
 /**
- * Dipanggil saat halaman dimuat. Urutan: (1) token tersimpan kalau ada &
- * masih valid -> langsung masuk, cepat; (2) kalau tidak ada/sudah
- * kedaluwarsa -> coba auto-sign-in diam-diam; (3) kalau itu juga gagal ->
- * layar login manual (ditangani di dalam attemptSilentSignIn()).
+ * Dipanggil saat halaman dimuat. Urutan: (1) sessionToken tersimpan
+ * (bertahan 30 hari -- lihat SessionService.gs) ATAU idToken Google
+ * tersimpan (~1 jam) dicoba lewat SATU panggilan 'login' -- backend yang
+ * memutuskan mana yang dipakai (sessionToken diutamakan, lihat
+ * resolveCurrentUser_ di Auth.gs); (2) kalau keduanya sudah tidak valid,
+ * coba auto-sign-in diam-diam Google; (3) baru layar login manual.
  */
 async function tryRestoreSession() {
-  const token = getStoredIdToken();
-  if (token) {
+  if (getStoredSessionToken() || getStoredIdToken()) {
     showLoginLoading();
     const result = await apiCall('login', {});
     if (result.success) {
+      setStoredSessionToken(result.data.sessionToken);
       currentUser = result.data;
       onLoginSuccess(currentUser);
       return;
     }
-    // Token tersimpan sudah tidak valid (kedaluwarsa ~1 jam, dst.) --
-    // JANGAN tampilkan sebagai error mencolok, ini kondisi normal. Buang,
-    // lalu coba jalur auto-sign-in diam-diam di bawah.
+    // Baik sessionToken maupun idToken (kalau ada) sudah tidak valid lagi
+    // -- JANGAN tampilkan sebagai error mencolok, ini kondisi normal
+    // (sesi kedaluwarsa setelah 30 hari, atau sudah logout). Buang semua,
+    // lanjut coba jalur auto-sign-in diam-diam di bawah.
+    setStoredSessionToken(null);
     setStoredIdToken(null);
   }
   attemptSilentSignIn();
 }
 
 function signOut() {
+  // Batalkan sesi di SERVER juga (bukan cuma buang token di client) --
+  // "fire and forget", tidak perlu ditunggu supaya tombol Keluar terasa
+  // instan; kalaupun request ini gagal (mis. sedang offline), token di
+  // client tetap dibuang sehingga user tetap ter-logout dari sisi dia.
+  apiCall('logout', { sessionToken: getStoredSessionToken() });
+  setStoredSessionToken(null);
   setStoredIdToken(null);
   currentUser = null;
   google.accounts.id.disableAutoSelect();

@@ -18,6 +18,14 @@
 
 async function apiCall(action, payload) {
   const body = Object.assign({ action: action }, payload || {});
+  // sessionToken (30 hari, sesi aplikasi sendiri) diutamakan backend kalau
+  // ada -- lihat resolveCurrentUser_ di Auth.gs. idToken Google (~1 jam)
+  // tetap disertakan sebagai fallback untuk login PERTAMA kali, sebelum
+  // sessionToken terbentuk.
+  const sessionToken = getStoredSessionToken();
+  if (sessionToken && !body.sessionToken) {
+    body.sessionToken = sessionToken;
+  }
   const token = getStoredIdToken();
   if (token && !body.idToken) {
     body.idToken = token;
@@ -58,4 +66,17 @@ function getStoredIdToken() {
 function setStoredIdToken(token) {
   if (token) localStorage.setItem('sp_id_token', token);
   else localStorage.removeItem('sp_id_token');
+}
+
+// --- Penyimpanan sessionToken (sesi aplikasi sendiri, 30 hari -- lihat
+//     SessionService.gs). Ini yang membuat "tidak perlu login lagi"
+//     BENAR-BENAR bertahan lama, tidak terikat batas ~1 jam token Google
+//     ataupun keandalan auto-sign-in diam-diam Google yang di luar kendali
+//     aplikasi ini. ---
+function getStoredSessionToken() {
+  return localStorage.getItem('sp_session_token') || null;
+}
+function setStoredSessionToken(token) {
+  if (token) localStorage.setItem('sp_session_token', token);
+  else localStorage.removeItem('sp_session_token');
 }
